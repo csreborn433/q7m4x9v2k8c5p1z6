@@ -20,7 +20,8 @@ BIN = 'game/bin/win64/'
 EXCLUDED_NAMES = {'items_game.txt','steam_api64_real.dll','steam_api64.dll',
                   'cs2_gc_inventory.txt','cs2_gc_finish_ids.json','cs2_gc.cfg','cs2_gc_gameplay.cfg'}
 ADMIN_TOOLS = {'settings_editor.py', 'grant_custom_cases.py', 'grant_test_items.py',
-               'reset_profile.py', 'cs2_gc_reset_profile.cmd', 'repair_inventory.cmd'}
+               'reset_profile.py', 'cs2_gc_reset_profile.cmd', 'repair_inventory.cmd',
+               'publish_update_feed.py'}
 COBBLESTONE_VPKS = {
     'map_assets/cobblewingman.vpk',
     'map_assets/cobblestone_resources/pak01_dir.vpk',
@@ -314,9 +315,10 @@ def publish_update_feed_to_github(package_path):
     with tempfile.TemporaryDirectory(prefix='cs2gc-update-feed-') as temporary:
         feed_dir = Path(temporary)/'feed'
         subprocess.run([gh,'repo','clone',repo,str(feed_dir)],check=True)
+        subprocess.run(['git','-C',str(feed_dir),'config','core.autocrlf','false'],check=True)
         import publish_update_feed as feed_publisher
         count,size,commit,version = feed_publisher.publish(package_path,feed_dir)
-        subprocess.run(['git','-C',str(feed_dir),'add','latest.json','files'],check=True)
+        subprocess.run(['git','-C',str(feed_dir),'add','latest.json','files','.gitattributes'],check=True)
         staged = subprocess.run(['git','-C',str(feed_dir),'diff','--cached','--quiet'])
         if staged.returncode == 0:
             print('The public update feed is already current.')
