@@ -22,11 +22,7 @@ EXCLUDED_NAMES = {'items_game.txt','steam_api64_real.dll','steam_api64.dll',
 ADMIN_TOOLS = {'settings_editor.py', 'grant_custom_cases.py', 'grant_test_items.py',
                'reset_profile.py', 'cs2_gc_reset_profile.cmd', 'repair_inventory.cmd',
                'publish_update_feed.py'}
-COBBLESTONE_VPKS = {
-    'map_assets/cobblewingman.vpk',
-    'map_assets/cobblestone_resources/pak01_dir.vpk',
-    'map_assets/cobblestone_resources/pak01_000.vpk',
-}
+EXCLUDED_TOOL_ASSET_DIRS = {'map_assets', 'cs2_gc_intro_assets'}
 
 
 def project_files(root):
@@ -36,9 +32,9 @@ def project_files(root):
         relative = path.relative_to(tools)
         if not path.is_file() or '__pycache__' in relative.parts:
             continue
-        if path.suffix.lower() not in ('.py','.png','.jpg','.cmd','.webm','.vpk'):
+        if relative.parts[0] in EXCLUDED_TOOL_ASSET_DIRS:
             continue
-        if path.suffix.lower() == '.vpk' and relative.as_posix().casefold() not in COBBLESTONE_VPKS:
+        if path.suffix.lower() not in ('.py','.png','.jpg','.cmd','.webm','.vpk'):
             continue
         if path.name in ADMIN_TOOLS or path.name.startswith('grant_'):
             continue
