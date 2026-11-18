@@ -1,0 +1,380 @@
+#!/usr/bin/env python3
+"""Local CS2 gameplay -> cumulative XP bridge. Standard library only; bot matches included.
+
+Run beside the local proxy, with --cfg-dir pointing at game/csgo/cfg once.
+Never writes the inventory: the proxy owns the atomic profile/pass/credit save.
+"""
+import argparse
+import hmac
+import json
+import os
+import lzma
+import struct
+from pathlib import Path
+import secrets
+import time
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from gameplay_config import load as load_gameplay
+from console_controls import ConsoleControls
+from care_package_bridge import CarePackageBridge
+import premier_rating
+from rewards_runtime import InstanceLock, ParentProcess, serve_until_parent_exits
+import contextlib
+import traceback
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+MAX_TOTAL = (1 << 64) - 1
+
+
+def integer(value, default=0):
+    return value if type(value) is int and value >= 0 else default
+
+
+def atomic_text(path, text):
+    temporary = path.with_name(path.name + '.tmp')
+    with temporary.open('w', encoding='utf-8', newline='\n') as output:
+        output.write(text)
+        output.flush()
+        os.fsync(output.fileno())
+    temporary.replace(path)
+
+
+class Rewards:
+    def __init__(self, directory):
+        self.directory = Path(directory)
+        self.config = load_gameplay(self.directory)
+        self.path = self.directory / 'cs2_gc_gsi_state.json'
+        if self.path.exists():
+            self.state = json.loads(self.path.read_text(encoding='utf-8'))
+            if (not isinstance(self.state, dict) or not isinstance(self.state.get('token'), str)
+                    or not self.state['token'] or type(self.state.get('total')) is not int
+                    or not 0 <= self.state['total'] <= MAX_TOTAL):
+                raise ValueError('Invalid GSI state; refusing to overwrite it')
+        else:
+            # Preserve the cumulative cursor if the bridge state alone was removed.
+            cursor = self.directory / 'cs2_gc_rewards.txt'
+            total = int(cursor.read_text().strip()) if cursor.exists() else 0
+            if not 0 <= total <= MAX_TOTAL:
+                raise ValueError('Invalid reward cursor')
+            self.state = {'token': secrets.token_hex(32), 'total': total, 'last': None}
+        match_cursor = self.directory / 'cs2_gc_matches.txt'
+        if 'matches' not in self.state:
+            self.state['matches'] = int(match_cursor.read_text().strip()) if match_cursor.exists() else 0
+        if type(self.state['matches']) is not int or not 0 <= self.state['matches'] <= MAX_TOTAL:
+            raise ValueError('Invalid completed-match counter')
+        from reward_cursors import reconcile
+        reconcile(self.directory,self.state)
+        self.state.setdefault('premier', premier_rating.initial(self.config))
+        premier = self.state['premier']
+        if not isinstance(premier, dict) or any(type(premier.get(key)) is not int or premier[key] < 0
+                for key in ('rating', 'wins', 'losses', 'ties')) or premier['rating'] > 99999:
+            raise ValueError('Invalid local Premier state')
+        # premier_bonus_wins is the total number of extra wins this setting has ever granted. Raising it adds the
+        # difference once (each counts as a normal win, with its rating gain); lowering it removes nothing.
+        applied = self.state.setdefault('premier_bonus_applied', 0)
+        if type(applied) is not int or not 0 <= applied <= 100:
+            raise ValueError('Invalid Premier bonus-win counter')
+        wanted = self.config['premier_bonus_wins']
+        if self.config['premier_enabled'] and wanted > applied:
+            for _ in range(wanted - applied):
+                premier = premier_rating.apply(premier, 'wins', self.config)
+            self.state['premier'] = premier
+            self.state['premier_bonus_applied'] = wanted
+            print(f"Granted {wanted - applied} bonus Premier wins from premier_bonus_wins. "
+                  f"{premier_rating.status(premier, self.config)}", flush=True)
+        self.last_received = None
+        self._saved_state = None
+        self._published = {}
+        self.save()
+
+    def publish(self, name, text):
+        if self._published.get(name) != text:
+            atomic_text(self.directory / name, text)
+            self._published[name] = text
+
+    def save(self):
+        from career_achievements import award
+        award(self.state, enabled=False)
+        # Commit deduplication and cumulative XP together before publishing the cursor.
+        meaningful = self.state.copy()
+        if meaningful.get('last'):
+            meaningful['last'] = dict(meaningful['last'], timestamp=0)
+        signature = json.dumps(meaningful, separators=(',', ':'))
+        if signature != self._saved_state:
+            atomic_text(self.path, json.dumps(self.state, separators=(',', ':')) + '\n')
+            self._saved_state = signature
+        self.publish('cs2_gc_rewards.txt', str(self.state['total']) + '\n')
+        self.publish('cs2_gc_matches.txt', str(self.state['matches']) + '\n')
+        self.publish('cs2_gc_reward_stars.txt', str(self.state.get('mission_stars', 0)) + '\n')
+        if self.config['premier_enabled']:
+            rank = self.state['premier']
+            self.publish('cs2_gc_premier.txt',
+                        f"{rank['rating']} {rank['wins']} {rank['wins'] + rank['losses'] + rank['ties']} "
+                        f"{self.config['premier_placement_wins']}\n")
+
+    def accept(self, packet):
+        if not isinstance(packet, dict):
+            return False
+        auth = packet.get('auth') or {}
+        if not isinstance(auth, dict) or not isinstance(auth.get('token'), str):
+            return False
+        if not hmac.compare_digest(auth['token'], self.state['token']):
+            return False
+        if self.last_received is None:
+            print('Game data received. Waiting for local-player live match statistics.', flush=True)
+        self.last_received = time.monotonic()
+        provider, player, game_map = (packet.get(k) or {} for k in ('provider', 'player', 'map'))
+        if not all(isinstance(v, dict) for v in (provider, player, game_map)):
+            return False
+        if provider.get('appid')==730 and isinstance(provider.get('steamid'),str) and provider['steamid'].isdigit():
+            self.state['local_player']=provider['steamid']
+        # A dead local player can be watching a bot when the match ends. Count the
+        # authenticated local match result using the last local team/stats, never the bot's scoreboard.
+        previous=self.state.get('last')
+        if (provider.get('appid')==730 and provider.get('steamid') and player.get('steamid')!=provider['steamid']
+                and game_map.get('phase')=='gameover' and previous and previous.get('player')==provider['steamid']
+                and previous.get('map')==game_map.get('name') and previous.get('mode')==game_map.get('mode')
+                and previous.get('team') in ('T','CT')):
+            player={'steamid':provider['steamid'],'team':previous['team'],'activity':'playing',
+                    'match_stats':{key:previous.get(key,0) for key in ('kills','mvps','assists','deaths')},
+                    'state':{'round_killhs':previous['headshots']}}
+        # Spectating a bot must not turn the bot's kills into the local player's rewards.
+        if (provider.get('appid') != 730 or not provider.get('steamid')
+                or player.get('steamid') != provider['steamid']
+                or player.get('team') not in ('T', 'CT')
+                or (player.get('activity') != 'playing' and game_map.get('phase') != 'gameover')):
+            return True
+        stats, state = player.get('match_stats') or {}, player.get('state') or {}
+        if not isinstance(stats, dict) or not isinstance(state, dict):
+            return False
+        if not all(type(stats.get(k)) is int and stats[k] >= 0 for k in ('kills', 'mvps')):
+            return True
+        timestamp = integer(provider.get('timestamp'))
+        last = self.state.get('last')
+        current = {'player': provider['steamid'], 'map': game_map.get('name'),
+                   'mode':game_map.get('mode'),'team':player.get('team'),
+                   'round': integer(game_map.get('round')), 'phase': game_map.get('phase'),
+                   'kills': stats['kills'], 'mvps': stats['mvps'],
+                   'assists': integer(stats.get('assists')), 'deaths': integer(stats.get('deaths')),
+                   'headshots': integer(state.get('round_killhs')), 'timestamp': timestamp,
+                   'finished': False}
+        bomb=packet.get('bomb') or {}
+        current['bomb']={k:bomb.get(k) for k in ('state','player')} if isinstance(bomb,dict) else {}
+        if last and timestamp < last['timestamp']:
+            return True
+        earned = 0
+        stars=0
+        same = (last and current['player'] == last['player'] and current['map'] == last['map']
+                and current['mode']==last.get('mode')
+                and current['round'] >= last['round'] and current['kills'] >= last['kills']
+                and current['mvps'] >= last['mvps'])
+        if same and current['phase'] in ('live', 'gameover') and last['phase'] == 'live':
+            earned += (current['kills'] - last['kills']) * self.config['kill_xp']
+            earned += (current['mvps'] - last['mvps']) * self.config['mvp_xp']
+            stars += (current['kills']-last['kills'])*self.config['kill_stars']
+            stars += (current['mvps']-last['mvps'])*self.config['mvp_stars']
+            old_hs = last['headshots'] if current['round'] == last['round'] else 0
+            new_hs=max(0,current['headshots']-old_hs)
+            if current['round']!=last['round']:new_hs=min(new_hs,current['kills']-last['kills'])
+            earned += new_hs * self.config['headshot_xp']
+            stars += new_hs*self.config['headshot_stars']
+            from local_stats import record
+            record(self.state,kills=current['kills']-last['kills'],headshots=new_hs,mvps=current['mvps']-last['mvps'])
+            # Objective rewards require a witnessed local player's completed action, never a global bomb event.
+            if current['round']==last['round']:
+                before_bomb=last.get('bomb') or {}
+                for action,before,after in (('plant','planting','planted'),('defuse','defusing','defused')):
+                    marker=action+'_paid'
+                    current[marker]=last.get(marker,False)
+                    if (not current[marker] and before_bomb.get('state')==before and current['bomb'].get('state')==after
+                            and before_bomb.get('player')==provider['steamid']):
+                        current[marker]=True;earned+=self.config[action+'_xp'];stars+=self.config[action+'_stars']
+                        record(self.state,**{('plants' if action=='plant' else 'defuses'):1})
+            if current['phase'] == 'gameover' and not last.get('finished'):
+                result = premier_rating.outcome(game_map, player.get('team'))
+                # Reduce only the completion bonus: already-published performance XP stays monotonic.
+                earned += self.config['match_complete_xp'] * (90 if result == 'losses' else 100) // 100
+                stars += self.config['match_complete_stars']
+                # Pay the requested match-result star reward for every mode when the
+                # GSI scoreboard exposes both team scores. A tie is treated as a loss.
+                if player.get('team') in ('T', 'CT'):
+                    ct = (game_map.get('team_ct') or {}).get('score')
+                    tt = (game_map.get('team_t') or {}).get('score')
+                    if type(ct) is int and type(tt) is int:
+                        own, other = (ct, tt) if player['team'] == 'CT' else (tt, ct)
+                        stars += self.config['match_win_stars'] if own > other else self.config['match_loss_stars']
+                self.state['matches'] = min(MAX_TOTAL, self.state['matches'] + 1)
+                if result and self.config['premier_enabled']:
+                    performance = {key: current[key] for key in ('kills', 'mvps', 'assists', 'deaths')}
+                    performance['rounds'] = game_map['team_t']['score'] + game_map['team_ct']['score']
+                    self.state['premier'] = premier_rating.apply(
+                        self.state['premier'], result, self.config, performance=performance)
+                    print(premier_rating.status(self.state['premier'], self.config), flush=True)
+        if same and current['phase'] == 'gameover':
+            current['finished'] = True
+        # First snapshot/reconnect/restart only establishes a baseline, never pays old scoreboard stats.
+        self.state['last'] = current
+        self.state['total'] = min(MAX_TOTAL, self.state['total'] + earned)
+        if self.config['stars_enabled']:
+            # Keep the legacy monotonic star counter intact for existing local saves.
+            self.state['mission_stars']=min(MAX_TOTAL,self.state.get('mission_stars',0)+stars)
+            self.state['gameplay_stars_earned']=self.state.get('gameplay_stars_earned',0)+stars
+        self.save()
+        if earned:
+            print(f"Earned {earned} XP; total {self.state['total']}; completed matches {self.state['matches']}.", flush=True)
+        return True
+
+
+def config_text(token, port):
+    return f'''"CS2 GC local progression"
+{{
+    "uri" "http://127.0.0.1:{port}/"
+    "timeout" "5.0"
+    "buffer" "0.1"
+    "throttle" "0.1"
+    "heartbeat" "5.0"
+    "auth" {{ "token" "{token}" }}
+    "data"
+    {{
+        "provider" "1"
+        "map" "1"
+        "player_id" "1"
+        "player_state" "1"
+        "player_match_stats" "1"
+        "player_weapons" "1"
+        "bomb" "1"
+    }}
+}}
+'''
+
+
+def handler_for(rewards):
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                if not 0 < length <= 262144:
+                    self.send_error(413)
+                    return
+                packet = json.loads(self.rfile.read(length))
+                accepted = rewards.accept(packet)
+                self.send_response(200 if accepted else 403)
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+            except (ValueError, TypeError, KeyError):
+                self.send_error(400)
+            except OSError:
+                # Failure must be retryable; never acknowledge an unpersisted reward.
+                self.send_error(503)
+
+        def log_message(self, *_):
+            pass  # Payloads contain local Steam identifiers; do not log them.
+    return Handler
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--proxy-dir', type=Path, required=True, help='Directory containing the local proxy DLL')
+    parser.add_argument('--cfg-dir', type=Path, help='Install only gamestate_integration_cs2_gc.cfg here, then restart CS2')
+    parser.add_argument('--port', type=int, default=31923)
+    parser.add_argument('--parent-pid', type=int, help='Exit when the launching game process closes')
+    parser.add_argument('--debug-console', action='store_true', help='Enable offline test aliases; disabled in release builds')
+    parser.add_argument('--log-file', type=Path, help='Write diagnostics here instead of a console window')
+    args = parser.parse_args()
+    if (not args.proxy_dir.is_dir() or not 1 <= args.port <= 65535
+            or (args.parent_pid is not None and args.parent_pid <= 0)):
+        parser.error('Use an existing proxy directory and a valid port')
+    with InstanceLock(args.proxy_dir) as acquired:
+        if not acquired:
+            if sys.stdout:
+                print('Rewards helper is already running for this game directory.')
+            return
+        if args.log_file:
+            # No tokens or packet payloads are logged. Rotate just this helper's diagnostic log.
+            if args.log_file.exists() and args.log_file.stat().st_size > 1024 * 1024:
+                args.log_file.replace(args.log_file.with_suffix('.previous.log'))
+            with args.log_file.open('a', encoding='utf-8', buffering=1) as output:
+                with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                    try:
+                        run(args)
+                    except Exception:
+                        traceback.print_exc()
+                        raise SystemExit(1)
+        else:
+            run(args)
+
+
+def run(args):
+    parent = ParentProcess(args.parent_pid)
+    try:
+        if not parent.alive():
+            return
+        run_with_parent(args, parent)
+    finally:
+        parent.close()
+
+
+def run_with_parent(args, parent):
+    # Bind before loading/writing state: another (including older) helper may own this port.
+    with HTTPServer(('127.0.0.1', args.port), BaseHTTPRequestHandler) as server:
+        rewards = Rewards(args.proxy_dir)
+        if args.cfg_dir:
+            if not args.cfg_dir.is_dir():
+                raise ValueError('--cfg-dir must be the existing game/csgo/cfg directory')
+            config_path = args.cfg_dir / 'gamestate_integration_cs2_gc.cfg'
+            content = config_text(rewards.state['token'], args.port)
+            if not config_path.exists() or config_path.read_text(encoding='utf-8') != content:
+                atomic_text(config_path, content)
+                print('GSI config installed/updated. If this is the first setup, restart CS2 once to load it.', flush=True)
+        # CS2 has already mounted these archives. Native preparation belongs to
+        # prepare_native.py in the launcher, while the game is closed. Replacing
+        # a numbered VPK here can invalidate the engine's open directory/offsets.
+        print('Native resources: unchanged while CS2 is running; prepare with cs2_gc_debug.exe before launch.', flush=True)
+        try:
+            from vpk_pack import status as vpk_status
+            print('Native VPK overrides: ' + vpk_status(args.proxy_dir), flush=True)
+        except OSError as error:
+            print('Native VPK overrides: status unavailable: ' + str(error), flush=True)
+        server.RequestHandlerClass = handler_for(rewards)
+        if args.cfg_dir and rewards.config['premier_enabled']:
+            difficulty_path = args.cfg_dir / 'cs2_gc_premier_bots.cfg'
+            last_difficulty = [-1]
+            def write_difficulty():
+                difficulty = premier_rating.bot_difficulty(rewards.state['premier'])
+                if difficulty == last_difficulty[0]: return
+                from fair_bot_policy import server_config
+                atomic_text(difficulty_path,server_config(rewards.state['premier']['rating']))
+                last_difficulty[0] = difficulty
+            write_difficulty()
+            print('Local Premier bot config prepared. In the local server console: exec cs2_gc_premier_bots', flush=True)
+        print('Local CS2 rewards bridge running' + (' in background; exits with CS2.' if args.parent_pid else ' in manual diagnostic mode.'), flush=True)
+        console = ConsoleControls(rewards, args.cfg_dir, args.parent_pid) if args.debug_console and args.cfg_dir and args.parent_pid else None
+        if console: print('Debug console controls enabled; cs2_gc_debug.exe loads the launch flags and command CFG automatically.', flush=True)
+        care = CarePackageBridge(args.proxy_dir, args.cfg_dir, args.parent_pid) if args.cfg_dir and args.parent_pid and rewards.config['care_packages_enabled'] else None
+        next_status = [time.monotonic() + 30]
+        from combat_events import CombatEvents
+        combat=CombatEvents(rewards,args.parent_pid)
+        from native_newsettings import NewSettingsBridge
+        new_settings = NewSettingsBridge(args.cfg_dir) if args.cfg_dir and args.parent_pid else None
+        def after_request():
+            combat.poll()
+            if new_settings: new_settings.poll()
+            if console: console.poll()
+            if care: care.poll()
+            if args.cfg_dir and rewards.config['premier_enabled']:
+                write_difficulty()
+            if time.monotonic() < next_status[0]: return
+            next_status[0] = time.monotonic() + 30
+            if rewards.last_received is None:
+                print('Waiting for CS2: restart the game after starting this helper; then enter a bot match.', flush=True)
+            elif time.monotonic() - rewards.last_received > 30:
+                print('No game data for 30 seconds. Check that CS2 is running with the installed GSI config.', flush=True)
+
+        serve_until_parent_exits(server, parent, after_request)
+        if new_settings: new_settings.poll()  # a choice made just before quitting
+        print('CS2 closed; rewards helper stopped.', flush=True)
+
+
+if __name__ == '__main__':
+    main()

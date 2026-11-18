@@ -1,0 +1,553 @@
+"""Prepare the installed native Armory script for matching per-category rotation."""
+import argparse
+import json
+import re
+from pathlib import Path
+from gameplay_config import load
+
+ANCHOR = '        aShopItemsData.forEach((element) => {\n'
+END = '''            _MakeNavButton(element);
+        });'''
+INSERT = '''    // Local GC Armory rotation: generated settings must match cs2_gc_gameplay.cfg.
+    const m_localRotation = __SETTINGS__;
+    function _LocalSetCollectionIcon(image, name) {
+        if (String(name)==='cs2gc_chicken_cosmetics') { image.SetImage('file://{images}/econ/cs2gc_chicken/helmet.png'); return; }
+        if (String(name).startsWith('set_cs2gc_')) {
+            image.SetImage('file://{images}/econ/set_icons/' + name + '.png');
+            return;
+        }
+        IconUtil.SetupFallbackItemSetIcon(image, name);
+        IconUtil.SetItemSetSVGImage(image, name);
+    }
+    function _LocalOpenEntry(entry) {
+        // The stock InventoryUpdate re-activates whichever tab button is checked. Check this entry's button too,
+        // otherwise the next inventory update jumps back to an older tab.
+        const nav = $.GetContextPanel().FindChildInLayoutFile(entry.item_name + '-nav');
+        if (nav && nav.IsValid()) nav.checked = true;
+        _LocalShowGrid(entry);
+    }
+    function _LocalShowGrid(entry) {
+        // Never leave the previous tab's grid on screen when this entry's grid fails to build or refresh.
+        try { _UpdateInspectGrid(entry); } catch (error) { $.Msg('cs2_gc armory: ' + entry.item_name + ': ' + error); }
+        const container = m_elContentPanel.FindChildInLayoutFile('id-xpshop-inspect-container');
+        if (container && container.FindChildInLayoutFile(entry.item_name + '-grid'))
+            _UpdateVisibleInspectGrid(container, entry.item_name + '-grid');
+    }
+    function _LocalCatalogueControls() {
+        const row = m_elContentPanel.FindChildInLayoutFile('id-xpshop-row-1');
+        if (row) {row.GetParent().style.marginTop = '0px'; row.GetParent().style.height = '94%';}
+        const morePasses = $.GetContextPanel().FindChildInLayoutFile('id-xpshop-more-passes-btn');
+        if (morePasses) {
+            morePasses.enabled = false;
+            morePasses.visible = false;
+            morePasses.style.visibility = 'collapse';
+        }
+        $.Msg('cs2_gc Armory: single 4/3/4 page mounted');
+    }
+    function _LocalCataloguePage(entries, active, cycle) {
+        const offers = entries.filter(e => active.indexOf(e.item_name) !== -1);
+        // Keep the fixed limited offer in the big tile without tying it to alphabetic order.
+        const limited = offers.filter(e => m_localRotation.categories[e.item_name] === 'limited');
+        const featured = limited.length ? [limited[(cycle || 0) % limited.length]] : [];
+        const groups = {};
+        offers.filter(e => featured.indexOf(e) === -1).forEach(e => {
+            const row = e.ui_order || '3'; (groups[row] || (groups[row] = [])).push(e);
+        });
+        Object.keys(groups).forEach(row => {
+            const types = {};
+            groups[row].forEach(entry => {
+                const kind = m_localRotation.categories[entry.item_name] || 'other';
+                (types[kind] || (types[kind] = [])).push(entry);
+            });
+            const order = row === '1' ? ['charm','sticker','agent'] : row === '3' ? ['souvenir','case','terminal','capsule'] : ['collection','limited'];
+            const kinds = Object.keys(types).sort((a,b) => order.indexOf(a)-order.indexOf(b)), ordered = [];
+            // Fixed native slots: two charms + sticker + agent above; souvenir + case + terminal + capsule below.
+            const limits = row === '1' ? {charm:2,sticker:1,agent:1} : row === '3' ? {souvenir:1,case:1,terminal:1,capsule:1} : {};
+            kinds.forEach(kind => {
+                if (limits[kind] === undefined || types[kind].length <= limits[kind]) return;
+                const pool = types[kind], start = ((cycle || 0) * limits[kind]) % pool.length;
+                types[kind] = Array.from({length:limits[kind]}, (_,i) => pool[(start+i)%pool.length]);
+            });
+            const length = Math.max(...kinds.map(kind => types[kind].length));
+            if (row === '1' || row === '3') kinds.forEach(kind => ordered.push(...types[kind]));
+            else for (let index = 0; index < length; ++index)
+                kinds.forEach(kind => {if (types[kind][index]) ordered.push(types[kind][index]);});
+            groups[row] = ordered;
+        });
+        // A single stock-style page: 4 small / 3 large / 4 small. The limited item takes one of the 3 large slots.
+        const capacity = {'1':4,'2':3,'3':4};
+        const view = featured.map(e => e.item_name);
+        Object.keys(groups).forEach(row => {
+            const room = Math.max(0, (capacity[row] || 4) - featured.filter(e => (e.ui_order || '2') === row).length);
+            groups[row].slice(0, room).forEach(e => view.push(e.item_name));
+        });
+        m_localFeatured = featured.length ? featured[0].item_name : null;
+        return view;
+    }
+    function _LocalRotationKey(slot, cycle, name) {
+        let hash = 2166136261;
+        const text = slot + ':' + cycle + ':' + name;
+        for (let i = 0; i < text.length; ++i)
+            hash = Math.imul(hash ^ text.charCodeAt(i), 16777619) >>> 0;
+        return hash;
+    }
+    function _LocalShuffleRotation(pool, slot, cycle, selectedCount) {
+        const sortForCycle = value => pool.slice().sort((a, b) => {
+            const first = _LocalRotationKey(slot, value, a.item_name);
+            const second = _LocalRotationKey(slot, value, b.item_name);
+            return first === second ? (a.item_name < b.item_name ? -1 : a.item_name > b.item_name ? 1 : 0) : first - second;
+        });
+        const shuffled = sortForCycle(cycle);
+        if (cycle > 0 && selectedCount > 0 && selectedCount < shuffled.length) {
+            const previous = sortForCycle(cycle - 1);
+            const repeats = shuffled.slice(0, selectedCount).every((entry, index) => entry.item_name === previous[index].item_name);
+            if (repeats) {
+                const next = shuffled[selectedCount];
+                shuffled[selectedCount] = shuffled[selectedCount - 1];
+                shuffled[selectedCount - 1] = next;
+            }
+        }
+        return shuffled;
+    }
+    function _LocalPlaceAgentTiles(container, entry) {
+        const width = Math.floor(container.actuallayoutwidth / container.actualuiscale_x);
+        const height = Math.floor(container.actuallayoutheight / container.actualuiscale_y) - 112; // reserve native purchase bar
+        if (width <= 0 || height <= 0) return;
+        const cards = container.Children().filter(panel => panel.Data().localAgentPreview);
+        const columns = Math.min(4, Math.max(1, Math.floor(width / 228)));
+        const areaHeight = Math.max(80, height - 174);
+        const rows = Math.min(2, Math.max(1, Math.floor((areaHeight + 16) / 224)));
+        const cardWidth = Math.min(212, Math.floor(width / columns) - 16);
+        const cardHeight = Math.min(208, areaHeight);
+        const capacity = columns * rows;
+        const pages = Math.max(1, Math.ceil(cards.length / capacity));
+        const data = container.Data();
+        data.localAgentPage = ((data.localAgentPage || 0) % pages + pages) % pages;
+        const first = data.localAgentPage * capacity;
+        const visibleCount = Math.min(capacity, cards.length - first);
+        const usedColumns = Math.min(columns, visibleCount);
+        const usedRows = Math.ceil(visibleCount / columns);
+        const left = (width - usedColumns * (cardWidth + 16) + 16) / 2;
+        const top = 110 + Math.max(0, (areaHeight - usedRows * (cardHeight + 16) + 16) / 2);
+        container.style.overflow = 'clip';
+        cards.forEach((panel, index) => {
+            const local = index - first;
+            panel.visible = local >= 0 && local < capacity;
+            if (!panel.visible) return;
+            panel.style.width = cardWidth + 'px'; panel.style.height = cardHeight + 'px';
+            panel.style.x = left + local % columns * (cardWidth + 16) + 'px';
+            panel.style.y = top + Math.floor(local / columns) * (cardHeight + 16) + 'px';
+        });
+        let pager = container.FindChildInLayoutFile('cs2gc-agent-pages');
+        if (!pager) {
+            pager = $.CreatePanel('Panel', container, 'cs2gc-agent-pages');
+            pager.style.width = '300px'; pager.style.height = '44px'; pager.style.flowChildren = 'right';
+            ['previous','label','next'].forEach(kind => {
+                if (kind === 'label') {
+                    const label = $.CreatePanel('Label', pager, 'cs2gc-agent-page-number');
+                    label.style.width = '204px'; label.style.fontSize = '20px';
+                    label.style.textAlign = 'center'; label.style.verticalAlign = 'center'; label.style.color = '#d5e7e7';
+                    return;
+                }
+                const button = $.CreatePanel('Button', pager, 'cs2gc-agent-' + kind);
+                button.style.width = '48px'; button.style.height = '44px'; button.style.backgroundColor = '#315c60dd';
+                const label = $.CreatePanel('Label', button, '', {text:kind === 'previous' ? '<' : '>'});
+                label.style.fontSize = '30px'; label.style.color = '#ffffff';
+                label.style.horizontalAlign = 'center'; label.style.verticalAlign = 'center';
+                button.SetPanelEvent('onactivate', () => {
+                    data.localAgentPage += kind === 'previous' ? -1 : 1;
+                    _LocalPlaceAgentTiles(container, entry);
+                });
+            });
+        }
+        pager.style.x = (width - 300) / 2 + 'px'; pager.style.y = height - 48 + 'px';
+        pager.FindChildInLayoutFile('cs2gc-agent-page-number').text = (first + 1) + '–' + (first + visibleCount) + ' / ' + cards.length;
+        pager.FindChildInLayoutFile('cs2gc-agent-previous').enabled = pages > 1;
+        pager.FindChildInLayoutFile('cs2gc-agent-next').enabled = pages > 1;
+        const grid = m_elContentPanel.FindChildInLayoutFile(entry.item_name + '-grid');
+        if (grid) {
+            grid.SetDialogVariable('use-text', 'Recruit a random agent');
+            grid.SetDialogVariable('desc-text', 'One random agent from the pool below.');
+            grid.SetDialogVariable('confirm-text', 'Recruit one random agent?');
+        }
+    }
+    let m_localRotationItems = [];
+    let m_localFeatured = null;
+    function _LocalCentreFeatured() {
+        // After visibility is set: put the limited tile right after the first visible tile of its row (on screen),
+        // so it is always the middle of the three large tiles.
+        if (!m_localFeatured) return;
+        const tile = m_elContentPanel.FindChildInLayoutFile(m_localFeatured);
+        const parent = tile && tile.GetParent ? tile.GetParent() : null;
+        if (!parent || !parent.Children || !parent.MoveChildAfter) return;
+        const others = parent.Children().filter(child => child !== tile && child.visible);
+        if (others.length) parent.MoveChildAfter(tile, others[0]);
+    }
+    let m_localRotationCycle = -1;
+    let m_localRotationActive = [];
+    let m_localRotationLogged = -1;
+    let m_localRotationVisible = [];
+    let m_localRotationTrack = 0;
+    let m_localRotationPageReady = false;
+    function _LocalRotationRefresh(force) {
+        const root = $.GetContextPanel();
+        if (!root.IsValid()) return;
+        _LocalCatalogueControls();
+        const entries = m_localRotationItems;
+        if (!entries.length || !m_localRotation.enabled) return;
+        const offset = parseInt(GameInterfaceAPI.GetSettingString('cs2_gc_rotation_offset')) || 0;
+        if (m_localRotationLogged !== offset) {
+            m_localRotationLogged = offset;
+            $.Msg('cs2_gc armory rotation hook: offset=' + offset + ' raw=[' + GameInterfaceAPI.GetSettingString('cs2_gc_rotation_offset') + ']');
+            // Tell the GC (SetEventFavorite reaches it; console aliases never do live) so the GC Armory and missions
+            // use the same local rotation offset: pseudo event 4300000000000000 + offset.
+            if (offset >= 0 && offset <= 1000000) TournamentsAPI.SetTournamentFavorite(4300000000000000 + offset, true);
+        }
+        const cycle = 0;
+        if (!force && m_localRotationCycle === cycle) return;
+        const pools = {};
+        entries.forEach(entry => {
+            const slot = m_localRotation.categories[entry.item_name];
+            if (slot) (pools[slot] || (pools[slot] = [])).push(entry);
+        });
+        const active = [];
+        if (Object.keys(pools).length) {
+            Object.keys(pools).sort().forEach(slot => {
+                const count = Math.min(m_localRotation.counts[slot] === undefined ? 1 : m_localRotation.counts[slot], pools[slot].length);
+                const pool = _LocalShuffleRotation(pools[slot], slot, cycle, count);
+                for (let i = 0; i < count; ++i) active.push(pool[i].item_name);
+            });
+        } else {
+            const count = Math.min(m_localRotation.slots, entries.length);
+            const pool = _LocalShuffleRotation(entries, 'all', cycle, count);
+            for (let i = 0; i < count; ++i) active.push(pool[i].item_name);
+        }
+        const view = _LocalCataloguePage(entries, active, cycle);
+        const previousVisible = m_localRotationVisible;
+        const cycleChanged = m_localRotationCycle !== -1 && m_localRotationCycle !== cycle;
+        m_localRotationActive = active;
+        m_localRotationVisible = view;
+        m_localRotationCycle = cycle;
+        if (cycleChanged && m_localRotationPageReady) {
+            _DeleteInspectGrid();
+            _CancelTimeoutForRewardItem();
+            previousVisible.forEach(name => {
+                const tile = m_elContentPanel.FindChildInLayoutFile(name);
+                const nav = root.FindChildInLayoutFile(name + '-nav');
+                if (tile) tile.DeleteAsync(0);
+                if (nav) nav.DeleteAsync(0);
+            });
+            m_localRotationPageReady = false;
+            _UpdateShopGoods(m_localRotationTrack);
+            return;
+        }
+        entries.forEach(entry => {
+            const show = view.indexOf(entry.item_name) !== -1;
+            const tile = m_elContentPanel.FindChildInLayoutFile(entry.item_name);
+            const nav = root.FindChildInLayoutFile(entry.item_name + '-nav');
+            if (tile) {
+                tile.visible = show;
+                if (show && entry.local_agent) {
+                    const portraits = tile.FindChildInLayoutFile('id-xpshop-tile-carousel');
+                    if (portraits) {
+                        portraits.style.width = '55%'; portraits.style.horizontalAlign = 'right';
+                        portraits.style.marginRight = '12px'; portraits.hittest = false; portraits.hittestchildren = false;
+                        portraits.Children().forEach(image => {
+                            image.style.width = '100%'; image.style.height = '100%';
+                            image.style.horizontalAlign = 'right'; image.hittest = false;
+                        });
+                    }
+                }
+                if (show && m_localRotation.categories[entry.item_name] === 'limited') {
+                    const oldArt = tile.FindChildTraverse('id-xpshop-limited-item-carousel');
+                    if (oldArt) oldArt.visible = false;
+                    const actual = tile.FindChildInLayoutFile('id-xpshop-tile-single-image');
+                    if (actual && entry.lootlist && entry.lootlist.length) {
+                        actual.itemid = entry.lootlist[0]; actual.visible = true;
+                    }
+                    const timer = tile.FindChildInLayoutFile('id-xpshop-tile-limitedtimer');
+                    if (timer) {
+                        timer.visible = false;
+                        timer.style.visibility = 'collapse';
+                    }
+                }
+            }
+            if (nav) nav.visible = show;
+        });
+        // Catalogue generation order is independent of visual order. Move visible tiles within each small row.
+        ['1','3'].forEach(rowId => {
+            const row = m_elContentPanel.FindChildInLayoutFile('id-xpshop-row-' + rowId);
+            if (!row) return;
+            let previous = null;
+            view.forEach(name => {
+                const entry = entries.find(e => e.item_name === name);
+                if (!entry || (entry.ui_order || '3') !== rowId) return;
+                const tile = m_elContentPanel.FindChildInLayoutFile(name);
+                if (!tile) return;
+                if (previous) row.MoveChildAfter(tile, previous);
+                previous = tile;
+            });
+        });
+        _LocalCentreFeatured();
+        if (cycleChanged) {
+            const visibleCollections = entries.filter(entry => view.indexOf(entry.item_name) !== -1 && m_localRotation.categories[entry.item_name] === 'collection');
+            $.Msg('cs2_gc armory visible collections: ' + visibleCollections.map(entry => entry.item_name + '=' + (entry.callout || '')).join(', '));
+        }
+    }
+'''
+
+
+PREPARE = '''        // Resolve each tile from its own native row, without inherited thumbnails or shared model artwork.
+        m_localRotationTrack = m_nTrack;
+        m_localRotationPageReady = false;
+        aShopItemsData.forEach(entry => {
+            const slot = m_localRotation.categories[entry.item_name];
+            const collectionTitle = m_localRotation.collectionNames?.[entry.item_name];
+            if (collectionTitle) {
+                entry.callout = collectionTitle;
+                delete entry.suffix_loc_string;
+                entry.ui_set_image = String(entry.item_name).replace('lootlist:', '');
+                entry.lootlist = _GetLootListForReward(entry.item_name);
+                entry.entry_type = 'lootlist'; entry.lootlist_item_type = 'weapon';
+                entry.ui_order = '2'; entry.tile_width = m_tileWidth; entry.tile_height = m_tileHeight;
+                entry.on_item_activate = _OpenFullScreenInspectItem;
+            }
+            entry.local_terminal = slot === 'terminal';
+            if(entry.item_name==='lootlist:cs2gc_chicken_cosmetics')entry.lootlist_item_type='sticker';
+            entry.local_souvenir = slot === 'souvenir';
+            entry.local_direct_case = entry.item_name === 'crate_cs2gc_black_market' || entry.item_name === 'crate_cs2gc_gauntlet';
+            if (slot === 'agent') {
+                // An operation's agent collection shows its own agents; older rows show every agent.
+                const own = String(entry.item_name).startsWith('lootlist:lootlist_cs2gc_agents_') ?
+                    _GetLootListForReward(entry.item_name).filter(id => id && id !== '0' && id !== entry.item_name) : [];
+                entry.lootlist = own.length ? own : m_localRotation.agents.map(name => InventoryAPI.GetFauxItemIDFromDefAndPaintIndex(
+                    InventoryAPI.GetItemDefinitionIndexFromDefinitionName(name), 0));
+                entry.local_agent = true;
+                entry.entry_type = 'lootlist'; entry.lootlist_item_type = 'agent';
+                entry.tile_width = 160; entry.tile_height = 160;
+            }
+            if (!entry.callout && entry.lootlist && entry.lootlist.length === 1)
+                entry.callout = InventoryAPI.GetItemName(entry.lootlist[0]);
+            if ((slot === 'capsule' || slot === 'souvenir') && entry.lootlist && entry.lootlist.length === 1) {
+                // Capsules and souvenirs grant their contents directly; display the actual reward pool.
+                const stickers = _GetLootListForReward(entry.lootlist[0]).filter(id => id && id !== '0' && id !== entry.lootlist[0] && (slot !== 'souvenir' || ItemInfo.IsWeapon(id)));
+                if (stickers.length > 0) {
+                    entry.lootlist = stickers;
+                    entry.entry_type = 'lootlist'; entry.lootlist_item_type = slot === 'souvenir' ? 'weapon' : 'sticker';
+                    entry.tile_width = slot === 'souvenir' ? m_tileWidth : m_stickerTileWidth;
+                    entry.tile_height = slot === 'souvenir' ? m_tileHeight : m_stickerTileWidth;
+                    entry.on_item_activate = _OpenFullScreenInspectItem;
+                    delete entry.suffix_loc_string;
+                }
+            }
+        });
+        m_localRotationItems = aShopItemsData.slice().sort((a, b) => a.item_name < b.item_name ? -1 : a.item_name > b.item_name ? 1 : 0);
+        _LocalRotationRefresh(true);
+'''
+
+
+COLLECTION_TILE_MODEL = '''    function _LocalCollectionTileModel(elTile, ShopEntry) {
+        const name = String(ShopEntry.item_name || '').replace('lootlist:', '');
+        const chase = m_localRotation.previews[name]?.[0];
+        if (!name.startsWith('set_cs2gc_') || !chase || !ShopEntry.lootlist?.length)
+            return false;
+        // Native lootlist arrays may be sorted by the client. The generated manifest
+        // keeps rarity order, so take its chase explicitly instead of the first native item.
+        const itemId = InventoryAPI.GetFauxItemIDFromDefAndPaintIndex(
+            InventoryAPI.GetItemDefinitionIndexFromDefinitionName(chase[0]), chase[1]);
+        const defName = InventoryAPI.GetItemDefinitionName(itemId);
+        const cameraData = XpShopWeaponCameraSettings.CameraSettings.find(({type}) => type === defName);
+        const camera = 'camera_weapon_' + (cameraData !== undefined ? cameraData.camera : '0');
+        const single = elTile.FindChildInLayoutFile('id-xpshop-tile-single-image');
+        const carousel = elTile.FindChildInLayoutFile('id-xpshop-tile-carousel');
+        const holder = $.CreatePanel('Panel', elTile, 'cs2gc-collection-model');
+        holder.style.ignoreParentFlow=true;holder.style.position='0px 0px 0px';
+        holder.style.width = '100%'; holder.style.height = '72%';
+        holder.style.verticalAlign = 'center'; holder.style.horizontalAlign = 'center';
+        holder.style.marginTop = '16px'; holder.hittest = false; holder.hittestchildren = false;
+        const model = MakeMapItemPreviewPanel(holder, camera, 'ui/xpshop_item', ShopEntry);
+        model.style.width = '100%'; model.style.height = '100%'; model.style.margin = '0px';
+        model.hittest = false; model.hittestchildren = false;
+        model.SetActiveItem(0); model.SetItemItemId(itemId, ''); model.SetRenderInterval(10);
+        single.visible = false; carousel.visible = false;
+        return true;
+    }
+'''
+
+
+def patch_collection_tile_models(source):
+    anchor = "            if (ShopEntry.lootlist?.length === 1) {"
+    function = '    function _MakeShopTile(ShopEntry) {'
+    if source.count(function) != 1 or '_LocalCollectionTileModel' in source:
+        raise ValueError('Changed custom collection tile model anchors')
+    start = source.index(function)
+    end = source.find('\n    function ', start + len(function))
+    if end < 0: end = len(source)
+    body = source[start:end]
+    if body.count(anchor) != 1:
+        raise ValueError('Changed custom collection tile model anchors')
+    source = source[:start] + COLLECTION_TILE_MODEL + source[start:]
+    start += len(COLLECTION_TILE_MODEL)
+    end += len(COLLECTION_TILE_MODEL)
+    return source[:start] + source[start:end].replace(anchor, '''            if (_LocalCollectionTileModel(elTile, ShopEntry)) {
+                // One native 3D chase model replaces missing generated inventory icons.
+            }
+            else if (ShopEntry.lootlist?.length === 1) {''', 1) + source[end:]
+
+
+def patch_previews(source):
+    carousel = '''                    let elLimitedCarousel = $.CreatePanel('Carousel', elTile, '');
+                    elLimitedCarousel.BLoadLayoutSnippet('limited-item-carousel');
+                    elLimitedCarousel.hittest = false;
+                    elLimitedCarousel.hittestchildren = false;'''
+    source = source.replace(carousel, "                    elTile.FindChildInLayoutFile('id-xpshop-tile-single-image').itemid = ShopEntry.lootlist[0];", 1)
+    # Avoid old map scenes retaining another entry's model: the inspect grid uses
+    # the existing native InspectModelImage path for fixed/limited goods.
+    grid = "                let elModel = elShopTile.FindChild('id-grid-item-model');"
+    # An optional preview change must not disable rotation/catalogue controls.
+    source = source.replace(grid, "                if (ShopEntry.local_agent) return;\n" + grid, 1)
+    create = "    function CreateShopTile(elTilesContainer, itemId, ShopEntry) {"
+    agent = '''
+        if (ShopEntry.local_agent) {
+            const panel = $.CreatePanel('Panel', elTilesContainer, itemId);
+            panel.Data().localAgentPreview = true;
+            panel.style.width = '212px'; panel.style.height = '222px'; panel.style.flowChildren = 'down';
+            panel.style.backgroundColor = '#18343be8'; panel.style.border = '1px solid #59818466';
+            const portrait = $.CreatePanel('ItemImage', panel, '', {itemid:itemId});
+            portrait.style.width = '100%'; portrait.style.height = '76%'; portrait.hittest = false;
+            const name = $.CreatePanel('Label', panel, '', {text:InventoryAPI.GetItemName(itemId)});
+            name.style.width = '100%'; name.style.height = '44px'; name.style.padding = '4px 8px';
+            name.style.fontSize = '16px'; name.style.textAlign = 'center'; name.style.color = '#e6efef';
+            return panel;
+        }'''
+    source = source.replace(create, create + agent, 1)
+    source = source.replace("if (ShopEntry.entry_type !== 'crate') {", "if (ShopEntry.local_terminal || ShopEntry.local_souvenir || ShopEntry.local_direct_case || ShopEntry.entry_type !== 'crate') {", 1)
+    placement = '    function PlaceTiles(elTilesContainer, ShopEntry) {'
+    source = source.replace(placement, placement + "\n        if (ShopEntry.local_agent) { _LocalPlaceAgentTiles(elTilesContainer, ShopEntry); return; }", 1)
+
+    source = source.replace('shuffledArray[iScrollingTile];', 'shuffledArray[iScrollingTile % shuffledArray.length];')
+    # Rebind callbacks when stock UI reuses panels after a catalogue refresh.
+    source = source.replace("        elTile.FindChildInLayoutFile('id-new-item-tag')", "        elTile.SetPanelEvent('onactivate', () => _LocalOpenEntry(ShopEntry));\n        elTile.FindChildInLayoutFile('id-new-item-tag')", 1)
+    nav_end = "    function _CancelTimeoutForRewardItem() {"
+    nav_binding = "        elBtn.SetPanelEvent('onactivate', () => _LocalShowGrid(ShopEntry));\n"
+    previous = "        }\n    }\n" + nav_end
+    source = source.replace(previous, "        }\n" + nav_binding + "    }\n" + nav_end, 1)
+    # Fallback icons are actual native item images, not guessed item-set SVG names.
+    end = '''            _MakeNavButton(element);
+        });'''
+    icons = '''
+            if (!element.ui_set_image && element.lootlist && element.lootlist.length) {
+                const nav = $.GetContextPanel().FindChildInLayoutFile(element.item_name + '-nav');
+                const stock = nav && nav.FindChild('id-xpshop-nav-btn-img');
+                if (stock) stock.visible = false;
+                if (nav && !nav.FindChild('local-item-icon'))
+                    $.CreatePanel('ItemImage', nav, 'local-item-icon', {itemid:element.lootlist[0], style:'width:36px;height:36px;'});
+            }'''
+    source = source.replace(end, "            _MakeNavButton(element);" + icons + "\n        });", 1)
+    route = '''
+            const currentTile = m_elContentPanel.FindChildInLayoutFile(element.item_name);
+            if (currentTile) currentTile.SetPanelEvent('onactivate', () => _LocalOpenEntry(element));
+            const currentNav = $.GetContextPanel().FindChildInLayoutFile(element.item_name + '-nav');
+            if (currentNav) currentNav.SetPanelEvent('onactivate', () => _LocalShowGrid(element));
+'''
+    source = source.replace('            _MakeNavButton(element);', '            _MakeNavButton(element);' + route, 1)
+    # Capsule (crate) grids can lack an ItemPreviewPanel; the stock refresh then threw before switching grids,
+    # leaving the previous tab (often Random Agent) on screen.
+    source = source.replace('if (elModel.PanZoomEnabled()) {', 'if (elModel && elModel.PanZoomEnabled()) {')
+    source = source.replace("$.Schedule(.25, () => elModel.TransitionToCamera('cam_case_open', 1));",
+                            "$.Schedule(.25, () => { if (elModel && elModel.IsValid()) elModel.TransitionToCamera('cam_case_open', 1); });", 1)
+    # The knife-only Black Market Case lists thousands of knives; draw a shuffled sample instead of freezing the page.
+    source = source.replace('let aCrateLootlist = _GetLootListForReward(itemId);',
+                            'let aCrateLootlist = _GetLootListForReward(itemId);\n                        if (aCrateLootlist.length > 96) aCrateLootlist = aCrateLootlist.sort(() => 0.5 - Math.random()).slice(0, 96);', 1)
+    # Category controls remain visible while inspecting; switching categories returns to tiles.
+    return source
+
+
+def patch(source, config, categories=None, agents=None, previews=None):
+    if config['armory_howl_enabled'] and not categories:
+        raise ValueError('Howl requires the matching generated native catalogue')
+    if source.count(ANCHOR) != 1 or source.count(END) != 1 or 'const m_elContentPanel =' not in source:
+        raise ValueError('Target xpshop.js differs from the inspected build')
+    if 'm_localRotation' in source: raise ValueError('Source is already patched')
+    from native_skins import CASE_COLLECTIONS
+    collection_names = {'lootlist:' + name: title for name, title in CASE_COLLECTIONS.items()
+                        if (categories or {}).get('lootlist:' + name) == 'collection'}
+    if (categories or {}).get('lootlist:cs2gc_chicken_cosmetics')=='collection':collection_names['lootlist:cs2gc_chicken_cosmetics']='Chicken Cosmetics'
+    settings = {'enabled': bool(config['armory_rotation_enabled']),
+                'slots': config['armory_rotation_slots'],
+                'categories': categories or {}, 'agents': agents or [], 'previews': previews or {},
+                'collectionNames': collection_names,
+                'counts': {slot: config.get('armory_' + slot + '_slots', 1) for slot in
+                           ('collection', 'case', 'capsule', 'charm', 'sticker', 'limited', 'agent', 'terminal', 'souvenir')}}
+    source = source.replace('    function _UpdateShopGoods(m_nTrack) {',
+                            INSERT.replace('__SETTINGS__', json.dumps(settings)) + '    function _UpdateShopGoods(m_nTrack) {', 1)
+    filtered_anchor = "        aShopItemsData.filter(element => !m_localRotation.enabled || m_localRotationVisible.indexOf(element.item_name) !== -1).forEach((element) => {\n"
+    source = source.replace(ANCHOR, PREPARE + filtered_anchor, 1) if categories else source
+    empty = '        if (!count) {\n            itemsList.push(rewardId);'
+    if previews and source.count(empty) == 1:
+        # Custom collections (native_finishes PREVIEW_FILE): the native count is 0 for their lootlist rewards.
+        source = source.replace(empty, '''        const localPreview = m_localRotation.previews[String(rewardId).replace('lootlist:', '')];
+        if (localPreview) {
+            localPreview.forEach(entry => itemsList.push(InventoryAPI.GetFauxItemIDFromDefAndPaintIndex(
+                InventoryAPI.GetItemDefinitionIndexFromDefinitionName(entry[0]), entry[1])));
+        }
+        else if (!count) {
+            itemsList.push(rewardId);''', 1)
+    if previews:
+        source = patch_collection_tile_models(source)
+    source = source.replace(END, END + '''
+        m_localRotationItems = aShopItemsData.slice().sort((a, b) => a.item_name < b.item_name ? -1 : a.item_name > b.item_name ? 1 : 0);
+        m_localRotationTrack = m_nTrack;
+        m_localRotationPageReady = true;
+        const custom = aShopItemsData.filter(entry => m_localRotation.collectionNames[entry.item_name]);
+        const missing = Object.keys(m_localRotation.collectionNames).filter(name => !aShopItemsData.some(entry => entry.item_name === name));
+        $.Msg('cs2_gc armory catalogue: custom=' + custom.length + '/' + Object.keys(m_localRotation.collectionNames).length + ' missing=[' + missing.join(',') + ']');
+        _LocalRotationRefresh(true);''', 1)
+    purchase = 'MissionsAPI.ActionRedeemOperationGoods(m_nTrack, ShopEntry.shop_index,'
+    if categories:
+        if source.count(purchase) != 1: raise ValueError('Changed native Armory redemption handler')
+        source = source.replace(purchase, "if (m_localRotation.enabled && m_localRotationActive.indexOf(ShopEntry.item_name) === -1) return;\n                " + purchase, 1)
+        source = source.replace('element.items_in_row = itemsInRows[element.ui_order];', "element.items_in_row = element.ui_order === '2' ? 3 : 4;")
+        source = patch_previews(source)
+        # Custom emblems are packed PNG textures, not compiled SVG resources.
+        source = re.sub(r'IconUtil\.SetupFallbackItemSetIcon\(elImage, ShopEntry\.ui_set_image\);\s*'
+                        r'IconUtil\.SetItemSetSVGImage\(elImage, ShopEntry\.ui_set_image\);',
+                        '_LocalSetCollectionIcon(elImage, ShopEntry.ui_set_image);', source)
+        # Preserve the stock expression, but let authoritative custom names win
+        # even when a client row carries stale donor metadata.
+        source = source.replace("elTile.SetDialogVariable('name', ShopEntry.callout ? $.Localize(ShopEntry.callout) : ShopEntry.item_name);",
+            "elTile.SetDialogVariable('name', m_localRotation.collectionNames[ShopEntry.item_name] || (ShopEntry.callout ? $.Localize(ShopEntry.callout) : ShopEntry.item_name));")
+        source = source.replace("elTile.SetDialogVariable('name', ShopEntry.callout ? $.Localize(ShopEntry.callout) : ShopEntry.item_name);",
+            "elTile.SetDialogVariable('name', ShopEntry.callout ? $.Localize(ShopEntry.callout) : (ShopEntry.lootlist.length === 1 ? InventoryAPI.GetItemName(ShopEntry.lootlist[0]) : ShopEntry.item_name.replace('lootlist:', '')));")
+    return source
+
+
+def prepare(proxy_directory, config):
+    from native_resources import install_override
+    from native_tradeups import FOLDER, OWNER
+    proxy = Path(proxy_directory)
+    manifest = proxy.parent.parent / FOLDER / 'cs2_gc_native_manifest.json'
+    categories = {}
+    if config['armory_rotation_enabled']:
+        data = json.loads(manifest.read_text(encoding='utf-8'))
+        if data.get('owner') != OWNER or not data.get('armory_catalogue'):
+            raise ValueError('Matching native Armory catalogue is not prepared')
+        categories = data['armory_catalogue']
+    from armory_rotation_catalog import agent_names
+    agents = agent_names((proxy / 'items_game.txt').read_text(encoding='utf-8-sig')) if categories else []
+    from native_finishes import PREVIEW_FILE
+    preview_path = proxy / PREVIEW_FILE
+    previews = json.loads(preview_path.read_text(encoding='utf-8')) if categories and preview_path.is_file() else {}
+    return install_override(proxy, enabled=config['armory_rotation_enabled'], folder='cs2_gc_armory',
+        comment='cs2_gc native armory', owner='cs2-gc-armory-ui-v1',
+        asset='panorama/scripts/xpshop.vjs_c', patch=lambda source: patch(source, config, categories, agents, previews))
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('source', type=Path)
+    parser.add_argument('--proxy-dir', type=Path, required=True)
+    parser.add_argument('--out', type=Path, required=True)
+    args = parser.parse_args()
+    result = patch(args.source.read_text(encoding='utf-8'), load(args.proxy_dir))
+    with args.out.open('x', encoding='utf-8', newline='\n') as output: output.write(result)
