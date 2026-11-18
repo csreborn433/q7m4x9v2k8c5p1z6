@@ -14,8 +14,8 @@ import zipfile
 
 REPOSITORY = 'csreborn433/q7m4x9v2k8c5p1z6'
 FEED_BRANCH = 'main'
-FEED_URL = 'https://raw.githubusercontent.com/{}/{}/latest.json'.format(REPOSITORY, FEED_BRANCH)
-FILES_URL = 'https://raw.githubusercontent.com/{}/{}/files/'.format(REPOSITORY, FEED_BRANCH)
+RAW_BASE_URL = 'https://raw.githubusercontent.com/{}/'.format(REPOSITORY)
+FEED_URL = RAW_BASE_URL + FEED_BRANCH + '/latest.json'
 MAX_ARCHIVE_SIZE = 512 * 1024 * 1024
 MAX_UNPACKED_SIZE = 2 * 1024 * 1024 * 1024
 MAX_FEED_SIZE = 8 * 1024 * 1024
@@ -206,8 +206,8 @@ def install_archive(archive_path, root, release_commit, game_closed_check=None):
     print('Mod update installed: ' + release_commit, flush=True)
 
 
-def _feed_file_url(name, digest):
-    return FILES_URL + quote(name, safe='/') + '?v=' + digest
+def _feed_file_url(name, digest, feed_commit):
+    return RAW_BASE_URL + feed_commit + '/files/' + quote(name, safe='/') + '?v=' + digest
 
 
 def _updated_manifest(current, feed, files):
@@ -253,6 +253,9 @@ def check_for_updates(root, opener=None, install=True, game_closed_check=None):
     commit = feed.get('commit')
     if not isinstance(commit, str) or not re.fullmatch(r'[0-9a-f]{40}', commit):
         raise UpdateError('The public update manifest has no valid source commit.')
+    feed_commit = feed.get('feed_commit')
+    if not isinstance(feed_commit, str) or not re.fullmatch(r'[0-9a-f]{40}', feed_commit):
+        raise UpdateError('The public update manifest has no valid immutable feed revision.')
     feed, feed_files = _file_manifest(json.dumps(feed).encode('utf-8'), commit)
     if not isinstance(feed.get('version'), str):
         raise UpdateError('The public update manifest has no mod version.')
@@ -292,7 +295,7 @@ def check_for_updates(root, opener=None, install=True, game_closed_check=None):
             digest = hashlib.sha256()
             downloaded = 0
             try:
-                with _request(_feed_file_url(name, expected), opener) as response, destination.open('wb') as output:
+                with _request(_feed_file_url(name, expected, feed_commit), opener) as response, destination.open('wb') as output:
                     while True:
                         block = response.read(1024 * 1024)
                         if not block:

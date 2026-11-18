@@ -318,15 +318,27 @@ def publish_update_feed_to_github(package_path):
         subprocess.run(['git','-C',str(feed_dir),'config','core.autocrlf','false'],check=True)
         import publish_update_feed as feed_publisher
         count,size,commit,version = feed_publisher.publish(package_path,feed_dir)
-        subprocess.run(['git','-C',str(feed_dir),'add','latest.json','files','.gitattributes'],check=True)
-        staged = subprocess.run(['git','-C',str(feed_dir),'diff','--cached','--quiet'])
-        if staged.returncode == 0:
-            print('The public update feed is already current.')
-            return
-        if staged.returncode != 1:
-            raise ValueError('Could not inspect staged update-feed changes')
         subprocess.run(['git','-C',str(feed_dir),'config','user.name','CSReborn Update Publisher'],check=True)
         subprocess.run(['git','-C',str(feed_dir),'config','user.email','updates@users.noreply.github.com'],check=True)
+
+        subprocess.run(['git','-C',str(feed_dir),'add','files','.gitattributes'],check=True)
+        payload_changes = subprocess.run(['git','-C',str(feed_dir),'diff','--cached','--quiet'])
+        if payload_changes.returncode == 1:
+            subprocess.run(['git','-C',str(feed_dir),'commit','-m',
+                            'Publish mod payload {} ({})'.format(version,commit[:8])],check=True)
+        elif payload_changes.returncode != 0:
+            raise ValueError('Could not inspect staged update-feed payload changes')
+
+        feed_commit = subprocess.check_output(
+            ['git','-C',str(feed_dir),'rev-parse','HEAD'],text=True).strip()
+        feed_publisher.set_feed_commit(feed_dir,feed_commit)
+        subprocess.run(['git','-C',str(feed_dir),'add','latest.json'],check=True)
+        manifest_changes = subprocess.run(['git','-C',str(feed_dir),'diff','--cached','--quiet'])
+        if manifest_changes.returncode == 0:
+            print('The public update feed is already current.')
+            return
+        if manifest_changes.returncode != 1:
+            raise ValueError('Could not inspect staged update-feed manifest changes')
         subprocess.run(['git','-C',str(feed_dir),'commit','-m',
                         'Publish mod update {} ({})'.format(version,commit[:8])],check=True)
         subprocess.run(['git','-C',str(feed_dir),'push','origin','HEAD:main'],check=True)
