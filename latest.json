@@ -117,7 +117,7 @@
     "game/bin/win64/kv3.py": "5741bcf3f0dfc6c493b72bb90074f5f2882e2e5f5c39794e65a8b69f5092534d",
     "game/bin/win64/launch_setup.py": "0ff419e5dfc2ebe9fb87a20c3b2bbec1d3f88efc0beb5a8d62ecf2429547bfbc",
     "game/bin/win64/launcher_actions.py": "8c7b42ccf43f816451b4bdb62daebbbec3e81242b2ff63d2d794583814d68349",
-    "game/bin/win64/launcher_update.py": "fb09558218237cdc4a3e4ea64291de0d3d32102b8e034cc02c6d30cafd97625b",
+    "game/bin/win64/launcher_update.py": "94dd93d72300a64bcf844e9ab73e21e059183b977532ad318160be3da52ec051",
     "game/bin/win64/local_stats.py": "c22cac8abb431322a95d48ba8ba1bb5c26faef4865c55f7b5e061e2559828364",
     "game/bin/win64/make_collection_icons.py": "23900994960671d65f3feac55d7a59a8f7e5bee40d2bb95f630a87901001a421",
     "game/bin/win64/make_proxy_def.py": "c0cf205c8f61793fae68fa26f1352db3d1861b80c3511bc092e100abdae57645",
@@ -158,7 +158,7 @@
     "game/bin/win64/next_collection_lineups.py": "569367c07e85ca54c2485b1bf00cf8273afa13da910254039588353428fa253e",
     "game/bin/win64/package_care_update.py": "1bb799101ba5682ecf420ab6affddd24e8eb6cb390bcd6aebf212906c9449fd7",
     "game/bin/win64/package_collection_update.py": "e2fd1cb25cd620c0c7887563d119a0505831f1ec9897c92291851206d3a6fd63",
-    "game/bin/win64/package_release.py": "2f5044dc829be693c2feedebfcd590df2dd5506d2575fa6ce74af0d0145692eb",
+    "game/bin/win64/package_release.py": "52f9d4af671320749b145c73cc43633f2e01916b13c9872614fb71bd57bed0b6",
     "game/bin/win64/popular_chases.py": "6f326fa403e228be566043681e46848d52de4675bc59a232910f6c43cbb921ea",
     "game/bin/win64/premier_rating.py": "e4e99313e69da31051ceff89496bf640d02b109be6ea1265ed34d045258ec8a6",
     "game/bin/win64/preparation_cache.py": "b5360ecf9408b6039bd8b1094a6ca424e8e3fb8b79a6de8f11b0dea2da996a9e",
@@ -197,8 +197,8 @@
     "Launch CS2 GC.exe": "4c4a7eb711b88537fab9a937bb18e872377203c7a3286c96af9b1796b3b3b700",
     "game/bin/win64/cs2_gc_payload/steam_api64.dll": "5db44561b98bbf3c89cf2872d5f8dd1c3bbb5e3f5acd4a1d369dd4b26d196a85",
     "game/bin/win64/gold_pools.txt": "45ffc1aa24548f5161d1274d311a6d5e45c4ea17e1515ab840613a8d05496166",
-    "game/bin/win64/cs2_gc_payload/bots/bot_improver.zip": "0cbc0b82ed2f8d0e655a704ab2aa710a22702cce424d2fd80e355b38aaefde6f",
-    "game/bin/win64/cs2_gc_payload/bots/bundle.json": "b131bd0b1cd277c616bab9e64955380688129b24c6da5f9058b7dcf08dfa1336",
+    "game/bin/win64/cs2_gc_payload/bots/bot_improver.zip": "8297f67528e88b48030ea9182be5cfd08765ce4e5176a783679a981b6c615756",
+    "game/bin/win64/cs2_gc_payload/bots/bundle.json": "2266643be9a3f0ee802db4863fbad1e14463b8e575bf1553f592256cf01e88af",
     "game/bin/win64/cs2_gc_payload/bots/resources/overrides/Low/botprofile.db": "c392b1f07b85fdc6fb5032c4c18c8b9662c7f9642b3dcded1ad3c61989f60f53",
     "game/bin/win64/cs2_gc_payload/bots/resources/overrides/Medium/botprofile.db": "82df33bcec25fd5f199599d5bfbbf2e9a2828dbd1b65c070ca561f16370e910d",
     "game/bin/win64/cs2_gc_payload/bots/resources/overrides/High/botprofile.db": "3b192024382eee76028d42e0f06ff453fb9093332136c77ffc3810d742207986",
@@ -241,5 +241,6 @@
     "game/bin/win64/cs2_gc_python/python312.zip": "fb131c0ef7e35cc5250a74c8cd18744bf4115fb8163710711f3758d7df3d1f88",
     "game/bin/win64/cs2_gc_python/python.cat": "5d85439736ae088d9680b391e2bca55ca7e9cc5b41a12ebe8e2f554506c7e72e",
     "game/bin/win64/cs2_gc_python/python312._pth": "e13f935b36f3bee77503c5986cefc2353ffb6c7a9eaa3da1e0c625d19f2b5252"
-  }
+  },
+  "feed_commit": "28b69109add2c449b5f5a723acc7927e17325ecd"
 }
