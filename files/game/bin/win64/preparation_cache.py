@@ -19,7 +19,7 @@ LIGHT_HELPERS = frozenset(name + '.py' for name in (
     'native_gloves','glove_refresh','fair_bot_policy','progress_saves','reward_cursors','save_shortcuts','settings_editor','native_stats','local_stats','career_achievements','combat_events','career_page','career_browser','career_extras','unboxing_stats','collectible_rewards','native_local_play','native_profile_pins','companions','chicken_cosmetics',
     'rotate_armory', 'native_scoreboard', 'native_store', 'skip_container_confirm', 'native_item_sales', 'native_multi_sell', 'bot_skins',
     'native_endmatch', 'native_offer_numbers', 'skip_key_select', 'native_endmatch_stock', 'native_care_packages',
-    'native_mainmenu', 'native_store_nav', 'native_knife_reel', 'native_bot_names', 'prepare_native', 'music_store',
+    'native_mainmenu', 'native_social', 'native_store_nav', 'native_knife_reel', 'native_bot_names', 'prepare_native', 'music_store',
     'preparation_cache', 'vpk_signatures', 'gsi_rewards', 'console_controls', 'grant_test_items',
     'grant_custom_cases', 'mixed_tradeup', 'terminal_purchase', 'study_skins', 'extract_vpk_asset',
     'extract_finish_materials', 'extract_gc_protocol', 'inspect_cs2', 'make_collection_icons',

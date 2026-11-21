@@ -23,7 +23,7 @@ from native_mainmenu import prepare as mainmenu
 from native_store_nav import prepare as store_nav
 from music_store import prepare as music_store
 from native_knife_reel import prepare as knife_reel
-from native_stats import prepare as stats_page
+from native_stats import prepare as party_page
 from combat_events import prepare as combat_tracking
 from match_bridge import prepare as match_flow
 from native_network import prepare as network_server
@@ -118,7 +118,7 @@ def prepare(directory, force_rebuild=False):
     print('Network server: ' + network_server(directory,config),flush=True)
     print('Settings menu / buy menu: ' + new_settings(directory, config), flush=True)
     print('Local Overpass and Wingman: ' + local_play(directory,config),flush=True)
-    print('Stats & achievements: ' + stats_page(directory, config),flush=True)
+    print('Parties tab: ' + party_page(directory, config),flush=True)
     print('Profile pins: ' + profile_pins(directory,config),flush=True)
     try: print('Bot names: ' + bot_names(directory, config, reshuffle=True), flush=True)
     except (OSError, ValueError, KeyError) as error: print('Bot names skipped (bots keep their normal names): ' + str(error), flush=True)

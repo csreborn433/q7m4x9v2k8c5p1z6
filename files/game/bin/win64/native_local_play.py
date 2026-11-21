@@ -217,6 +217,12 @@ SCRIPT=r'''
         const first=_LocalHostAddresses()[0];
         return 'connect '+(first?first.ip:'<your LAN/Hamachi IP>')+':27015';
     }
+    function _LocalAnnouncePartyStart() {
+        if (!m_localOnline || !LobbyAPI.BIsHost()) return;
+        const addresses = _LocalHostAddresses();
+        const address = addresses.find(a => a.label === 'Internet' || a.label === 'Public') || addresses[0];
+        if (address) $.Msg('CS2GC_PARTY start ' + address.ip + ':27015');
+    }
     function _LocalApplyServerPassword(pw) {
         pw=(pw||'').trim();
         GameInterfaceAPI.SetSettingString('ui_host_password',pw);
@@ -307,7 +313,7 @@ SCRIPT=r'''
             const s=LobbyAPI.GetSessionSettings();
             if(s&&s.options&&s.game&&s.options.server==='listen'&&s.options.action==='custommatch'&&s.game.mode==='competitive'&&s.game.map===map&&s.game.mapgroupname==='mg_'+map&&Number(s.game.gamemodeflags)===16) {
                 if(m_localVeto){m_localVeto.DeleteAsync(0);m_localVeto=null;}
-                LobbyAPI.StartMatchmaking('','','','');m_localStarting=false;
+                _LocalAnnouncePartyStart();LobbyAPI.StartMatchmaking('','','','');m_localStarting=false;
                 let waits=0;
                 function join() {if(GameStateAPI.GetMapBSPName()===map){GameInterfaceAPI.ConsoleCommand('jointeam '+team);return;}if(++waits<180)$.Schedule(1,join);}
                 $.Schedule(1,join);return;
@@ -461,7 +467,10 @@ def patch(source,maps,online=True):
     start_search = '    function StartSearch() {'
     # Both registered mapgroups must use native StartMatchmaking so the Steam party follows.
     host_online = '''
-        if (m_serverSetting === 'listen' && !m_isWorkshop) _LocalApplyHostOnline();'''
+        if (m_serverSetting === 'listen' && !m_isWorkshop && LobbyAPI.BIsHost()) {
+            _LocalApplyHostOnline();
+            if (m_gameModeSetting !== 'premier') _LocalAnnouncePartyStart();
+        }'''
     anchors=[(start_search, start_search + host_online + '''
         $.Msg('[CS2GC Premier] GO server='+m_serverSetting+' mode='+m_gameModeSetting+' workshop='+m_isWorkshop);
         if (m_serverSetting === "listen" && m_gameModeSetting === "premier" && !m_isWorkshop) {

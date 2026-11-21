@@ -3,8 +3,8 @@
 RELEASE must match data/mod_version.txt. Closing the window saves ui_cs2gc_whatsnew = SEEN_ID through the NEW
 settings bridge (native_newsettings.py), so it appears again only after the next update changes RELEASE.
 """
-RELEASE = '1.0'
-SEEN_ID = 'r1_0'
+RELEASE = '1.0.1'
+SEEN_ID = 'r1_0_1'
 DISPLAY_VERSION = 'V' + RELEASE
 TITLE = "WHAT'S NEW IN CS-REBORN"
 SUBTITLE = DISPLAY_VERSION
@@ -14,6 +14,12 @@ AGENTS_AFTER = 'NEW: Anime Case'
 # (header, [(bold lead, text)]) in display order.
 SECTIONS = [
     ("NEW IN " + DISPLAY_VERSION, [
+        ('Parties', 'open the Parties tab to host or join a Steam lobby. Choose a map in Play when everyone is ready. '
+                    'If native party travel does not connect you, use Copy Connect.'),
+        ('Leaderboards', 'open Steam profiles discovered on this device. Recently Unboxed now shows your last '
+                         'four pulls on Home, with float and seed for painted items.'),
+    ]),
+    ("FROM V1.0", [
         ('Armory refresh', 'a fixed 4/3/4 page. Top: Missing Link Charms (3 stars), a sticker capsule (2), the '
                            'stkr craft stickers (2) and a Name Tag (1). Middle: the Sport & Field Collection (10), '
                            'the Anime Case (50) and the new glove-only Gauntlet Case (15). Bottom: Overpass 2024 (5), '
@@ -39,6 +45,6 @@ SECTIONS = [
                                              'anime agents. It holds for 3 seconds, then fades to a living teammate, '
                                              'or stays at your head when nobody is alive.'),
         ('New links', 'click the CS-REBORN BETA 1.0 badge under the Armory for the official website, or '
-                      "DEVELOPER above PARTIES for the developer's Steam profile."),
+                      "DEVELOPER for the developer's Steam profile."),
     ]),
 ]

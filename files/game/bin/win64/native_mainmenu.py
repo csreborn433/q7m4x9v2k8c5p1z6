@@ -3,15 +3,16 @@
 Installed mainmenu.vts_c is patched in its own VPK.
 """
 from native_resources import install_override
+from native_social import SOCIAL_MENU
 import json
 import re
 
 ANCHOR = '    function _OnShowMainMenu() {'
 WEBSITE_URL = 'https://csreborn.base44.app/'
 DEVELOPER_PROFILE_URL = 'https://steamcommunity.com/id/DARKKNIGHTHOURS/'
-STATS_NAV = """
-        const statsNav = $.GetContextPanel().FindChildInLayoutFile('MainMenuNavBarNews');
-        if (statsNav) statsNav.FindChildrenWithClassTraverse('mainmenu-top-navbar__radio-btn__label').forEach(label => label.text = 'STATS');
+PARTIES_NAV = """
+        const partyNav = $.GetContextPanel().FindChildInLayoutFile('MainMenuNavBarNews');
+        if (partyNav) partyNav.FindChildrenWithClassTraverse('mainmenu-top-navbar__radio-btn__label').forEach(label => label.text = 'PARTIES');
 """
 MAINMENU_BETA = """
         const column = $.GetContextPanel().FindChildTraverse('JsLeftColumn');
@@ -172,7 +173,7 @@ ARMORY_ONLY = """
             const holdsArmory = panel => !!panel.FindChildTraverse('id-btn-open-xpshop');
             column.Children().forEach(child => {
                 if (!holdsArmory(child) && child.id !== 'cs2gc-beta-indicator' && child.id !== 'cs2gc-whatsnew-button' &&
-                    child.id !== 'cs2gc-parties-button' && child.id !== 'cs2gc-developer-button' &&
+                    child.id !== 'cs2gc-leaderboards-button' && child.id !== 'cs2gc-developer-button' &&
                     child.id !== 'cs2gc-update-banner')
                     _LocalCollapse(child);
             });
@@ -198,9 +199,11 @@ MENU_REFRESH = """
             _LocalHideNewPopular($.GetContextPanel());
             _LocalHideClientUpdate($.GetContextPanel());
             __ARMORY__
+            const tab = partyNav && partyNav.checked && _cs2gcPartyMenu.FindChildTraverse('cs2gc-party-tab');
+            if (tab) _LocalShowParties(tab);
+            _LocalSocialTick();
             m_localMenuTimer = $.Schedule(2, _LocalRefreshVisibleMenu);
         }
-        _LocalRefreshVisibleMenu();
 """
 HIDE_ANCHOR = '    function _OnHideMainMenu() {'
 WHATS_NEW_ICON = 'panorama/images/cs2_gc/csreborn_icon_png.vtex_c'
@@ -496,7 +499,8 @@ PARTIES = """
                 ui.seq = info.seq;
             }
             const missing = !info.seq && ui.ticks > 6;
-            const signature = JSON.stringify([info, members, isHost, ui.local, missing]);
+            const offer = _LocalFollowOffer();
+            const signature = JSON.stringify([info, members, isHost, ui.local, missing, offer]);
             if (signature === ui.signature) return;
             ui.signature = signature;
             const states = {
@@ -519,6 +523,7 @@ PARTIES = """
             ui.host.enabled = isHost;
             ui.host.style.opacity = isHost ? '1' : '0.45';
             ui.stop.visible = hosting;
+            ui.copy.visible = !!offer;
             ui.leave.visible = members.length > 1 || info.state === 'member';
             ui.list.RemoveAndDeleteChildren();
             info.parties.forEach((party, index) => {
@@ -554,7 +559,7 @@ PARTIES = """
         function _LocalPartyTick(ui) {
             ui.timer = null;
             if (ui !== m_localPartyUi || ui.closing || !ui.overlay.IsValid()) return;
-            if (_LocalInMatch()) {
+            if (_LocalInMatch() || !m_localMenuVisible || !partyNav || !partyNav.checked) {
                 _LocalPartyClose(ui);
                 return;
             }
@@ -584,7 +589,7 @@ PARTIES = """
                 }
             });
         }
-        function _LocalShowParties() {
+        function _LocalShowParties(tab) {
             if (_LocalInMatch()) return;
             const previous = m_localPartyUi;
             if (previous && previous.overlay.IsValid()) {
@@ -597,7 +602,7 @@ PARTIES = """
                 }
                 return;
             }
-            const overlay = $.CreatePanel('Panel', _cs2gcPartyMenu, 'cs2gc-parties');
+            const overlay = $.CreatePanel('Panel', tab, 'cs2gc-parties');
             overlay.hittest = true;
             Object.assign(overlay.style, {width: '100%', height: '100%', backgroundColor: '#000000c0', opacity: '0',
                 transitionProperty: 'opacity', transitionDuration: '0.2s', zIndex: '1000'});
@@ -611,8 +616,8 @@ PARTIES = """
             const header = $.CreatePanel('Panel', card, '');
             Object.assign(header.style, {width: '100%', flowChildren: 'down', padding: '26px 32px 16px 32px'});
             _LocalWhatsNewLabel(header, 'PARTIES', 'stratum-bold-condensed', 34, '#ffffff');
-            _LocalWhatsNewLabel(header, 'Play online with other CS-Reborn players. Host a party or join one: when the ' +
-                'host starts a map, everyone in the party follows automatically.', 'stratum-regular', 17, '#aeb6c2');
+            _LocalWhatsNewLabel(header, 'Join a lobby to follow the host into Play. If Steam does not take you into ' +
+                'the match, use the host\\'s connect command. Direct connections need a reachable server.', 'stratum-regular', 17, '#aeb6c2');
             const rule = $.CreatePanel('Panel', card, '');
             Object.assign(rule.style, {width: '100%', height: '1px', backgroundColor: '#ffffff1a'});
             const body = $.CreatePanel('Panel', card, '');
@@ -637,6 +642,10 @@ PARTIES = """
                 LobbyAPI.CloseSession();
                 _LocalPartyRender(ui);
             });
+            ui.copy = _LocalPartyButton(actions, 'cs2gc-parties-connect', 'COPY CONNECT', () => {
+                const offer = _LocalFollowOffer();
+                if (offer) SteamOverlayAPI.CopyTextToClipboard('connect ' + offer.address);
+            });
             const listHeader = $.CreatePanel('Panel', body, '');
             Object.assign(listHeader.style, {width: '100%', flowChildren: 'right', marginTop: '24px', marginBottom: '8px'});
             const heading = _LocalWhatsNewLabel(listHeader, 'OPEN PARTIES', 'stratum-bold-condensed', 22, '#ff9a3c');
@@ -652,46 +661,40 @@ PARTIES = """
             const footer = $.CreatePanel('Panel', card, '');
             Object.assign(footer.style, {width: '100%', flowChildren: 'right', padding: '14px 32px 24px 32px',
                 borderTop: '1px solid #ffffff1a'});
-            const close = _LocalPartyButton(footer, 'cs2gc-parties-close', 'CLOSE', () => _LocalPartyClose(ui));
-            Object.assign(close.style, {horizontalAlign: 'right', marginRight: '0px', padding: '10px 40px',
-                backgroundColor: 'gradient(linear, 0% 0%, 100% 0%, from(#ff8a1f), to(#e8326e))'});
+            _LocalWhatsNewLabel(footer, 'You can switch tabs without leaving your lobby.', 'stratum-regular', 15, '#aeb6c2');
             m_localPartyUi = ui;
             _LocalPartyTick(ui);
             $.Schedule(0.05, () => { if (overlay.IsValid() && !ui.closing) overlay.style.opacity = '1'; });
         }
-        // PARTIES sits above WHAT'S NEW (JsLeftColumn flows up).
-        function _LocalPartiesButton() {
+        function _LocalLeaderboardsButton() {
             const column = _cs2gcPartyMenu.FindChildTraverse('JsLeftColumn');
             const whatsNew = column && column.FindChildTraverse('cs2gc-whatsnew-button');
             if (!column || !whatsNew) return;
-            let button = column.FindChildTraverse('cs2gc-parties-button');
+            let button = column.FindChildTraverse('cs2gc-leaderboards-button');
             if (!button) {
-                button = $.CreatePanel('Button', column, 'cs2gc-parties-button');
+                button = $.CreatePanel('Button', column, 'cs2gc-leaderboards-button');
                 button.hittest = true;
                 Object.assign(button.style, {width: '256px', height: '46px', marginBottom: '8px', flowChildren: 'right',
                     padding: '0px 14px', backgroundColor: '#15181de6', borderRadius: '4px', border: '1px solid #ffffff1a',
                     borderLeft: '3px solid #e8326e', transitionProperty: 'background-color', transitionDuration: '0.15s'});
-                const label = _LocalWhatsNewLabel(button, 'PARTIES', 'stratum-bold-condensed', 20, '#ffffff');
+                const label = _LocalWhatsNewLabel(button, 'LEADERBOARDS', 'stratum-bold-condensed', 20, '#ffffff');
                 Object.assign(label.style, {width: 'fill-parent-flow(1.0)', verticalAlign: 'center', letterSpacing: '1px'});
-                const online = _LocalWhatsNewLabel(button, 'ONLINE', 'stratum-regular', 15, '#aeb6c2');
+                const online = _LocalWhatsNewLabel(button, 'PLAYERS', 'stratum-regular', 15, '#aeb6c2');
                 Object.assign(online.style, {width: 'fit-children', verticalAlign: 'center'});
                 [label, online].forEach(child => child.hittest = false);
                 button.SetPanelEvent('onmouseover', () => button.style.backgroundColor = '#262b33f0');
                 button.SetPanelEvent('onmouseout', () => button.style.backgroundColor = '#15181de6');
             }
-            button.SetPanelEvent('onactivate', () => {
-                $.Msg('CS2GC parties: open requested (map "' + GameStateAPI.GetMapBSPName() + '")');
-                _LocalShowParties();
-            });
+            button.SetPanelEvent('onactivate', _LocalShowPlayers);
             column.MoveChildAfter(button, whatsNew);
         }
-        _LocalPartiesButton();
+        _LocalLeaderboardsButton();
 """
 DEVELOPER = """
-        // A compact button above PARTIES opens the developer's Steam profile.
+        // A compact button above Leaderboards opens the developer's Steam profile.
         function _LocalDeveloperButton() {
             const column = _cs2gcPartyMenu.FindChildTraverse('JsLeftColumn');
-            const parties = column && column.FindChildTraverse('cs2gc-parties-button');
+            const parties = column && column.FindChildTraverse('cs2gc-leaderboards-button');
             if (!column || !parties) return;
             let button = column.FindChildTraverse('cs2gc-developer-button');
             if (!button) {
@@ -749,7 +752,7 @@ UPDATE_BANNER = """
             banner.style.visibility = version ? 'visible' : 'collapse';
             if (!version) return;
             banner.__cs2gcVersion.text = 'Version ' + version + ' is ready to download';
-            const above = ['cs2gc-developer-button', 'cs2gc-parties-button', 'cs2gc-whatsnew-button']
+            const above = ['cs2gc-developer-button', 'cs2gc-leaderboards-button', 'cs2gc-whatsnew-button']
                 .map(id => column.FindChildTraverse(id)).find(panel => panel);
             if (above) column.MoveChildAfter(banner, above);
         }
@@ -1096,15 +1099,21 @@ def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
         raise ValueError('Installed main menu layout changed; no patch written')
     source=source.replace(ANCHOR, '    let m_localMenuTimer = null;\n    let m_localMenuVisible = false;\n' +
                           '    let m_localWhatsNewShown = false;\n    let m_localPartyUi = null;\n    let m_localPartyAccess = \'\';\n' +
-                          ANCHOR + STATS_NAV + MAINMENU_BETA.replace('__WEBSITE_URL__', WEBSITE_URL) +
+                          ANCHOR + PARTIES_NAV + MAINMENU_BETA.replace('__WEBSITE_URL__', WEBSITE_URL) +
                           DEFAULT_CT_PISTOL + HIDE_MAINMENU_FRIENDS + HUD_SMOKE_SYNC +
                           HIDE_NEW_POPULAR + HIDE_CLIENT_UPDATE_BUTTON +
                           (ARMORY_ONLY if hide_promo else "") +
                           MENU_REFRESH.replace('__ARMORY__', '_LocalKeepOnlyArmory();' if hide_promo else '') +
-                          whats_new_script() + PARTIES +
-                          DEVELOPER.replace('__DEVELOPER_PROFILE_URL__', DEVELOPER_PROFILE_URL) + UPDATE_BANNER, 1)
+                          whats_new_script() + PARTIES + SOCIAL_MENU +
+                          DEVELOPER.replace('__DEVELOPER_PROFILE_URL__', DEVELOPER_PROFILE_URL) + UPDATE_BANNER +
+                          '\n        _LocalRefreshVisibleMenu();\n', 1)
     source=source.replace(HIDE_ANCHOR, HIDE_ANCHOR + '''
         m_localMenuVisible = false;
+        const root = $.GetContextPanel(), pulls = root.FindChildTraverse('cs2gc-home-pulls');
+        if (pulls) pulls.visible = false;
+        if (typeof GameInterfaceAPI !== 'undefined' && GameInterfaceAPI.SetSettingString)
+            ['cs2gc_follow','cs2gc_openings','cs2gc_pull_0','cs2gc_pull_1','cs2gc_pull_2','cs2gc_pull_3']
+                .forEach(key => GameInterfaceAPI.SetSettingString(key,''));
         if (m_localMenuTimer !== null) {
             $.CancelScheduled(m_localMenuTimer);
             m_localMenuTimer = null;
