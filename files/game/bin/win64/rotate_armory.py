@@ -434,6 +434,11 @@ def patch_previews(source):
             const image = $.CreatePanel('ItemImage', panel, '', {itemid:itemId});
             image.style.width = '65%'; image.style.height = '65%';
             image.style.horizontalAlign = 'center'; image.style.verticalAlign = 'center';
+            if (ShopEntry.item_name === 'crate_cs2gc_anime') {
+                // The case art sits in the top half; its agent contents are listed in a band underneath.
+                image.style.width = '60%'; image.style.height = '50%';
+                image.style.verticalAlign = 'top'; image.style.marginTop = '8px';
+            }
             image.hittest = false;
             return panel;
         }
@@ -488,11 +493,29 @@ def patch_previews(source):
     # The knife-only Black Market Case lists thousands of knives; draw a shuffled sample instead of freezing the page.
     from native_agents import AGENTS
     definitions = json.dumps([int(definition) for _, definition, _ in AGENTS])
+    tiles = "let elLootlistItemTiles = $.CreatePanel('Panel', elLootlistItems, '', { class: 'xpshop__crate-lootlist__tiles' });"
+    # Stock cases put their contents beside a 3D model; the Anime Case art is a flat image, so its agents go below it.
+    source = source.replace(tiles, tiles + """
+                        if (ShopEntry.item_name === 'crate_cs2gc_anime') {
+                            Object.assign(elLootlistItems.style, {width: '900px', height: '280px', horizontalAlign: 'center',
+                                verticalAlign: 'bottom', marginBottom: '8px', borderRadius: '8px',
+                                opacityMask: 'none', backgroundImage: 'none'});
+                            Object.assign(elLootlistItemTiles.style, {width: 'fit-children', height: 'fit-children',
+                                flowChildren: 'right', horizontalAlign: 'center', verticalAlign: 'top',
+                                marginTop: '56px', padding: '0px'});
+                        }""", 1)
     source = source.replace('let aCrateLootlist = _GetLootListForReward(itemId);',
                             """let aCrateLootlist = ShopEntry.item_name === 'crate_cs2gc_anime'
                             ? __AGENTS__.map(def => InventoryAPI.GetFauxItemIDFromDefAndPaintIndex(def, 0))
                             : _GetLootListForReward(itemId);
                         if (aCrateLootlist.length > 96) aCrateLootlist = aCrateLootlist.sort(() => 0.5 - Math.random()).slice(0, 96);""".replace('__AGENTS__', definitions), 1)
+    # A lootlist inspect switches to the weapon view, hiding an agent's only (character) panel and leaving the
+    # popup black. Open agents with the stock non-lootlist inspect settings instead.
+    source = source.replace('$.DispatchEvent("LootlistItemPreview", id, itemId);', '''if (InventoryAPI.GetDefaultSlot(id) === 'customplayer')
+                                        UiToolkitAPI.ShowCustomLayoutPopup('', 'file://{resources}/layout/popups/popup_inventory_inspect.xml').Data().oSettings =
+                                            { item_id: id, inspect_only: true, hide_all_action_items: true, hide_item_cert: true };
+                                    else
+                                        $.DispatchEvent("LootlistItemPreview", id, itemId);''', 1)
     # Category controls remain visible while inspecting; switching categories returns to tiles.
     return source
 

@@ -25,9 +25,9 @@ COMMUNITY_CAPSULES = ('crate_sticker_pack_cs20_capsule', 'crate_sticker_pack_csg
 LIMITED_PRICES = {'set_xpshop_wpn_01': 25, 'set_xpshop_wpn_02': 15,
                   'set_xpshop_wpn_03': 25, 'set_xpshop_wpn_04': 125}
 LIMITED_LISTS = tuple(LIMITED_PRICES)
-# Our generated cases sold in fixed case tiles (user, v1.2): Vanilla knife case 15, Gauntlet glove case 5.
+# Our generated cases sold in fixed case tiles: Vanilla knife case 15, Gauntlet glove case 15.
 # The Karambit Case keeps its definition for owned copies but is no longer sold.
-CUSTOM_CASE_PRICES = {'crate_cs2gc_vanilla': 15, 'crate_cs2gc_gauntlet': 5}
+CUSTOM_CASE_PRICES = {'crate_cs2gc_vanilla': 15, 'crate_cs2gc_gauntlet': 15}
 # Fixed tile prices that differ from their category price.
 FIXED_PRICES = {'lootlist:set_realism_camo': 10, 'Name Tag': 1}
 # Cases never offered in the Armory rotation. crate_community_4 is the Operation Breakout

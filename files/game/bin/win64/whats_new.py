@@ -16,7 +16,7 @@ SECTIONS = [
     ("NEW IN " + DISPLAY_VERSION, [
         ('Armory refresh', 'a fixed 4/3/4 page. Top: Missing Link Charms (3 stars), a sticker capsule (2), the '
                            'stkr craft stickers (2) and a Name Tag (1). Middle: the Sport & Field Collection (10), '
-                           'the Anime Case (50) and the new glove-only Gauntlet Case (5). Bottom: Overpass 2024 (5), '
+                           'the Anime Case (50) and the new glove-only Gauntlet Case (15). Bottom: Overpass 2024 (5), '
                            'Dreams & Nightmares Case (5), the Dead Hand Terminal (5) and the new Vanilla Knife Case (15).'),
         ('Vanilla Knife Case', 'opens without a key and gives one random vanilla knife, with a chance of StatTrak. '
                                'Karambit Cases you already own still open normally.'),
@@ -38,5 +38,8 @@ SECTIONS = [
         ('Automatic first-person death view', 'the head-attached camera is always enabled for default, official and '
                                              'anime agents. It holds for 3 seconds, then fades to a living teammate, '
                                              'or stays at your head when nobody is alive.'),
+        ('New intro and links', 'a new CS-REBORN intro plays when the game starts. Click the CS-REBORN BETA 1.0 badge '
+                                'under the Armory for the official website, or DEVELOPER above PARTIES for the '
+                                "developer's Steam profile."),
     ]),
 ]

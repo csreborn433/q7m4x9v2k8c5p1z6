@@ -7,6 +7,8 @@ import json
 import re
 
 ANCHOR = '    function _OnShowMainMenu() {'
+WEBSITE_URL = 'https://csreborn.base44.app/'
+DEVELOPER_PROFILE_URL = 'https://steamcommunity.com/id/DARKKNIGHTHOURS/'
 STATS_NAV = """
         const statsNav = $.GetContextPanel().FindChildInLayoutFile('MainMenuNavBarNews');
         if (statsNav) statsNav.FindChildrenWithClassTraverse('mainmenu-top-navbar__radio-btn__label').forEach(label => label.text = 'STATS');
@@ -20,10 +22,12 @@ MAINMENU_BETA = """
                 armoryBranch = armoryBranch.GetParent();
             let indicator = column.FindChildTraverse('cs2gc-beta-indicator');
             if (!indicator) {
-                indicator = $.CreatePanel('Panel', column, 'cs2gc-beta-indicator');
+                // The badge under the Armory opens the CS-Reborn website.
+                indicator = $.CreatePanel('Button', column, 'cs2gc-beta-indicator');
                 Object.assign(indicator.style, {width:'256px', height:'36px', marginBottom:'8px',
                     padding:'0px 12px', flowChildren:'right', backgroundColor:'#15181de6',
-                    borderRadius:'4px', border:'1px solid #ffffff1a', borderLeft:'3px solid #ff8a1f'});
+                    borderRadius:'4px', border:'1px solid #ffffff1a', borderLeft:'3px solid #ff8a1f',
+                    transitionProperty:'background-color', transitionDuration:'0.15s'});
                 const brand = $.CreatePanel('Label', indicator, '', {text:'CS-REBORN'});
                 brand.AddClass('stratum-bold-condensed');
                 Object.assign(brand.style, {width:'fill-parent-flow(1)', fontSize:'20px',
@@ -33,9 +37,15 @@ MAINMENU_BETA = """
                 Object.assign(version.style, {fontSize:'16px', color:'#ffb66d',
                     verticalAlign:'center', padding:'2px 6px', borderRadius:'3px',
                     backgroundColor:'#ff8a1f18'});
-                indicator.hittest = false;
-                indicator.hittestchildren = false;
+                [brand, version].forEach(child => child.hittest = false);
+                indicator.hittest = true;
+                indicator.SetPanelEvent('onmouseover', () => indicator.style.backgroundColor = '#262b33f0');
+                indicator.SetPanelEvent('onmouseout', () => indicator.style.backgroundColor = '#15181de6');
             }
+            indicator.SetPanelEvent('onactivate', () => {
+                $.DispatchEvent('CSGOPlaySoundEffect', 'UIPanorama.mainmenu_press_home', 'MOUSE');
+                SteamOverlayAPI.OpenUrlInOverlayOrExternalBrowser('__WEBSITE_URL__');
+            });
             column.MoveChildBefore(indicator, armoryBranch);
         }
 """
@@ -162,7 +172,8 @@ ARMORY_ONLY = """
             const holdsArmory = panel => !!panel.FindChildTraverse('id-btn-open-xpshop');
             column.Children().forEach(child => {
                 if (!holdsArmory(child) && child.id !== 'cs2gc-beta-indicator' && child.id !== 'cs2gc-whatsnew-button' &&
-                    child.id !== 'cs2gc-parties-button' && child.id !== 'cs2gc-update-banner')
+                    child.id !== 'cs2gc-parties-button' && child.id !== 'cs2gc-developer-button' &&
+                    child.id !== 'cs2gc-update-banner')
                     _LocalCollapse(child);
             });
             ['id-open-fullscreen-store-btn', 'id-mini-store-carousel', 'id-major-mini-store-carousel',
@@ -676,6 +687,35 @@ PARTIES = """
         }
         _LocalPartiesButton();
 """
+DEVELOPER = """
+        // A compact button above PARTIES opens the developer's Steam profile.
+        function _LocalDeveloperButton() {
+            const column = _cs2gcPartyMenu.FindChildTraverse('JsLeftColumn');
+            const parties = column && column.FindChildTraverse('cs2gc-parties-button');
+            if (!column || !parties) return;
+            let button = column.FindChildTraverse('cs2gc-developer-button');
+            if (!button) {
+                button = $.CreatePanel('Button', column, 'cs2gc-developer-button');
+                button.hittest = true;
+                Object.assign(button.style, {width: '256px', height: '30px', marginBottom: '8px', flowChildren: 'right',
+                    padding: '0px 12px', backgroundColor: '#15181de6', borderRadius: '4px', border: '1px solid #ffffff1a',
+                    borderLeft: '3px solid #66c0f4', transitionProperty: 'background-color', transitionDuration: '0.15s'});
+                const label = _LocalWhatsNewLabel(button, 'DEVELOPER', 'stratum-bold-condensed', 15, '#ffffff');
+                Object.assign(label.style, {width: 'fill-parent-flow(1.0)', verticalAlign: 'center', letterSpacing: '1px'});
+                const profile = _LocalWhatsNewLabel(button, 'STEAM PROFILE', 'stratum-regular', 13, '#66c0f4');
+                Object.assign(profile.style, {width: 'fit-children', verticalAlign: 'center'});
+                [label, profile].forEach(child => child.hittest = false);
+                button.SetPanelEvent('onmouseover', () => button.style.backgroundColor = '#262b33f0');
+                button.SetPanelEvent('onmouseout', () => button.style.backgroundColor = '#15181de6');
+            }
+            button.SetPanelEvent('onactivate', () => {
+                $.DispatchEvent('CSGOPlaySoundEffect', 'UIPanorama.mainmenu_press_home', 'MOUSE');
+                SteamOverlayAPI.OpenUrlInOverlayOrExternalBrowser('__DEVELOPER_PROFILE_URL__');
+            });
+            column.MoveChildAfter(button, parties);
+        }
+        _LocalDeveloperButton();
+"""
 UPDATE_BANNER = """
         // cs2_gc: the rewards helper writes cfg/cs2gc_update.cfg with "0" or the newer published mod version. The
         // banner sits at the top of the left column and asks the player to reopen the launcher, which installs mod
@@ -709,9 +749,9 @@ UPDATE_BANNER = """
             banner.style.visibility = version ? 'visible' : 'collapse';
             if (!version) return;
             banner.__cs2gcVersion.text = 'Version ' + version + ' is ready to download';
-            const parties = column.FindChildTraverse('cs2gc-parties-button');
-            const whatsNew = column.FindChildTraverse('cs2gc-whatsnew-button');
-            if (parties || whatsNew) column.MoveChildAfter(banner, parties || whatsNew);
+            const above = ['cs2gc-developer-button', 'cs2gc-parties-button', 'cs2gc-whatsnew-button']
+                .map(id => column.FindChildTraverse(id)).find(panel => panel);
+            if (above) column.MoveChildAfter(banner, above);
         }
         // Shows the answer of the previous exec, then queues the next read (cfg values arrive once the exec runs).
         function _LocalUpdateTick() {
@@ -1056,11 +1096,13 @@ def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
         raise ValueError('Installed main menu layout changed; no patch written')
     source=source.replace(ANCHOR, '    let m_localMenuTimer = null;\n    let m_localMenuVisible = false;\n' +
                           '    let m_localWhatsNewShown = false;\n    let m_localPartyUi = null;\n    let m_localPartyAccess = \'\';\n' +
-                          ANCHOR + STATS_NAV + MAINMENU_BETA + DEFAULT_CT_PISTOL + HIDE_MAINMENU_FRIENDS + HUD_SMOKE_SYNC +
+                          ANCHOR + STATS_NAV + MAINMENU_BETA.replace('__WEBSITE_URL__', WEBSITE_URL) +
+                          DEFAULT_CT_PISTOL + HIDE_MAINMENU_FRIENDS + HUD_SMOKE_SYNC +
                           HIDE_NEW_POPULAR + HIDE_CLIENT_UPDATE_BUTTON +
                           (ARMORY_ONLY if hide_promo else "") +
                           MENU_REFRESH.replace('__ARMORY__', '_LocalKeepOnlyArmory();' if hide_promo else '') +
-                          whats_new_script() + PARTIES + UPDATE_BANNER, 1)
+                          whats_new_script() + PARTIES +
+                          DEVELOPER.replace('__DEVELOPER_PROFILE_URL__', DEVELOPER_PROFILE_URL) + UPDATE_BANNER, 1)
     source=source.replace(HIDE_ANCHOR, HIDE_ANCHOR + '''
         m_localMenuVisible = false;
         if (m_localMenuTimer !== null) {

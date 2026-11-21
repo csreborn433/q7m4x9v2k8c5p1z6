@@ -58,6 +58,15 @@ ANIME_LIST = """    function _SetLootListItems(caseId, keyId) {
         const count = InventoryAPI.GetLootListItemsCount(caseId);"""
 ANIME_ITEM = "            const itemid = InventoryAPI.GetLootListItemIdByIndex(caseId, i) === '0' ? specialItemId : InventoryAPI.GetLootListItemIdByIndex(caseId, i);"
 ANIME_COUNT = '        const lootListCount = InventoryAPI.GetLootListItemsCount(caseId);'
+ANIME_INSPECT = """        $.DispatchEvent("LootlistItemPreview", itemid, caseId +
+            ',' + storeid);"""
+# The lootlist preview switches to the weapon view, which hides an agent's character panel and leaves a black popup.
+ANIME_INSPECT_INSERT = """        if (InventoryAPI.GetDefaultSlot(itemid) === 'customplayer') {
+            UiToolkitAPI.ShowCustomLayoutPopup('', 'file://{resources}/layout/popups/popup_inventory_inspect.xml').Data().oSettings =
+                { item_id: itemid, inspect_only: true, hide_all_action_items: true, hide_item_cert: true };
+            return;
+        }
+""" + ANIME_INSPECT
 
 
 def patch(source, reel, keyless=False, agents=()):
@@ -71,7 +80,7 @@ def patch(source, reel, keyless=False, agents=()):
     result = source.replace(ANCHOR, INSERT, 1).replace(FUNCTION, helper + FUNCTION, 1).replace(TILE, TILE_INSERT, 1)
     if result.count(HINT) == 1: result = result.replace(HINT, HINT_INSERT, 1)
     if agents:
-        for anchor in (ANIME_LIST, ANIME_ITEM, ANIME_COUNT):
+        for anchor in (ANIME_LIST, ANIME_ITEM, ANIME_COUNT, ANIME_INSPECT):
             if result.count(anchor) != 1:
                 raise ValueError('Installed anime contents/reel anchors changed; no patch written')
         result = result.replace(FUNCTION, ANIME_HELPER.replace('__AGENTS__', json.dumps([int(a) for a in agents])) + FUNCTION, 1)
@@ -80,6 +89,7 @@ def patch(source, reel, keyless=False, agents=()):
         const count = localItems.length || InventoryAPI.GetLootListItemsCount(caseId);""", 1)
         result = result.replace(ANIME_ITEM, ANIME_ITEM.replace('const itemid = ', 'const itemid = localItems.length ? localItems[i] : '), 1)
         result = result.replace(ANIME_COUNT, '        const lootListCount = _LocalAnimeLoot(caseId).length || InventoryAPI.GetLootListItemsCount(caseId);', 1)
+        result = result.replace(ANIME_INSPECT, ANIME_INSPECT_INSERT, 1)
     if keyless:
         anchor = '            const associatedItemCount = InventoryAPI.GetAssociatedItemsCount(caseId);'
         if result.count(anchor) != 1: raise ValueError('Installed unlock key branch changed; no patch written')
