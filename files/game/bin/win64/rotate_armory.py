@@ -48,22 +48,44 @@ INSERT = '''    // Local GC Armory rotation: generated settings must match cs2_g
         const offers = entries.filter(e => active.indexOf(e.item_name) !== -1);
         const kind = name => offers.filter(e => m_localRotation.categories[e.item_name] === name);
         const name = entry => entry && entry.item_name;
-        const take = (pool, count, skip=[]) => pool.filter(e => skip.indexOf(e.item_name) === -1).slice(0, count);
+        const find = (pool, item) => pool.find(e => e.item_name === item);
         const collections = kind('collection');
-        const featuredCollection = collections.find(e => e.item_name === 'lootlist:set_realism_camo') || collections[collections.length - 1];
-        const collectionSmall = take(collections, 2, featuredCollection ? [featuredCollection.item_name] : []);
+        const featuredCollection = find(collections, 'lootlist:set_realism_camo') || collections[collections.length - 1];
+        const gunCollections = collections.filter(e => e !== featuredCollection).slice(0, 2);
         const cases = kind('case');
-        const karambit = cases.find(e => e.item_name === 'crate_cs2gc_karambit');
-        const otherCases = take(cases, 2, [name(karambit)].filter(Boolean));
-        const selectedCases = [otherCases[0], karambit || otherCases[1]].filter(Boolean);
-        const top = [kind('charm')[0], collectionSmall[0], kind('sticker')[0], collectionSmall[1]].filter(Boolean);
-        const featured = kind('limited').find(e => e.item_name === 'crate_cs2gc_anime') || kind('limited')[0];
-        const middle = [featuredCollection, featured, kind('tool')[0]].filter(Boolean);
-        const bottom = [kind('capsule')[0], selectedCases[0], kind('terminal')[0], selectedCases[1]].filter(Boolean);
+        const gloveCase = find(cases, 'crate_cs2gc_gauntlet');
+        const knifeCase = find(cases, 'crate_cs2gc_vanilla');
+        const otherCases = cases.filter(e => e !== gloveCase && e !== knifeCase);
+        const capsules = kind('capsule');
+        const stickerCapsule = capsules.find(e => String(e.item_name).startsWith('crate_sticker_pack_')) || capsules[0];
+        const top = [kind('charm')[0], stickerCapsule, kind('sticker')[0], kind('tool')[0]].filter(Boolean);
+        const featured = find(kind('limited'), 'crate_cs2gc_anime') || kind('limited')[0];
+        const middle = [featuredCollection, featured, gloveCase || otherCases.shift()].filter(Boolean);
+        const bottom = [gunCollections[0], gunCollections[1], kind('terminal')[0], knifeCase || otherCases.shift()].filter(Boolean);
         m_localFeatured = name(middle[1]);
         const page = top.concat(middle, bottom);
         [top, middle, bottom].forEach((row, index) => row.forEach(entry => entry.ui_order = String(index + 1)));
         return page.map(name);
+    }
+    // Fixed picks of each pool, mirrored by cs2_gc Armory::RotationAt.
+    const _LocalPreferred = {
+        collection: ['lootlist:set_realism_camo'],
+        charm: ['lootlist:keychain_pack_kc_missinglink_lootlist'],
+        sticker: ['lootlist:sticker_pack_stkr_craft_01_lootlist'],
+        case: ['crate_cs2gc_vanilla', 'crate_cs2gc_gauntlet'],
+        terminal: ['crate_community_37'],
+        limited: ['crate_cs2gc_anime', 'crate_cs2gc_black_market']
+    };
+    // The two "random gun collection" tiles are official collections other than the ones the
+    // sticker capsule and Name Tag tiles replaced; the capsule tile is a sticker capsule.
+    const _LocalReplacedCollections = ['lootlist:set_arabesque', 'lootlist:set_graphic_design'];
+    function _LocalPickLast(slot, name) {
+        name = String(name);
+        if (slot === 'collection')
+            return name.startsWith('lootlist:set_cs2gc_') || name === 'lootlist:cs2gc_chicken_cosmetics' ||
+                _LocalReplacedCollections.indexOf(name) !== -1;
+        if (slot === 'capsule') return !name.startsWith('crate_sticker_pack_');
+        return false;
     }
     function _LocalRotationKey(slot, cycle, name) {
         let hash = 2166136261;
@@ -195,14 +217,12 @@ INSERT = '''    // Local GC Armory rotation: generated settings must match cs2_g
         if (Object.keys(pools).length) {
             Object.keys(pools).sort().forEach(slot => {
                 const count = Math.min(m_localRotation.counts[slot] === undefined ? 1 : m_localRotation.counts[slot], pools[slot].length);
-                const preferred = {
-                    collection: ['lootlist:set_realism_camo'],
-                    case: ['crate_cs2gc_karambit'],
-                    limited: ['crate_cs2gc_anime', 'crate_cs2gc_black_market']
-                }[slot] || [];
+                const preferred = _LocalPreferred[slot] || [];
                 const shuffled = _LocalShuffleRotation(pools[slot], slot, cycle, count);
                 const fixed = preferred.map(item => shuffled.find(entry => entry.item_name === item)).filter(Boolean);
-                const pool = fixed.concat(shuffled.filter(entry => fixed.indexOf(entry) === -1));
+                const rest = shuffled.filter(entry => fixed.indexOf(entry) === -1);
+                const pool = fixed.concat(rest.filter(entry => !_LocalPickLast(slot, entry.item_name)),
+                                          rest.filter(entry => _LocalPickLast(slot, entry.item_name)));
                 for (let i = 0; i < count; ++i) active.push(pool[i].item_name);
             });
         } else {
@@ -301,8 +321,9 @@ PREPARE = '''        // Resolve each tile from its own native row, without inher
                 entry.on_item_activate = _OpenFullScreenInspectItem;
             }
             if (slot === 'collection')
-                entry.ui_order = entry.item_name === 'lootlist:set_realism_camo' ? '2' : '1';
-            else if (slot === 'agent' || slot === 'tool') entry.ui_order = '2';
+                entry.ui_order = entry.item_name === 'lootlist:set_realism_camo' ? '2' : '3';
+            else if (slot === 'agent') entry.ui_order = '2';
+            else if (slot === 'tool') entry.ui_order = '1';
             entry.local_terminal = slot === 'terminal';
             if (slot === 'tool') {
                 entry.lootlist = [InventoryAPI.GetFauxItemIDFromDefAndPaintIndex(
@@ -311,7 +332,8 @@ PREPARE = '''        // Resolve each tile from its own native row, without inher
             }
             if(entry.item_name==='lootlist:cs2gc_chicken_cosmetics')entry.lootlist_item_type='sticker';
             entry.local_souvenir = slot === 'souvenir';
-            entry.local_direct_case = entry.item_name === 'crate_cs2gc_black_market' || entry.item_name === 'crate_cs2gc_gauntlet' || entry.item_name === 'crate_cs2gc_anime' || entry.item_name === 'crate_cs2gc_karambit';
+            entry.local_direct_case = ['crate_cs2gc_black_market', 'crate_cs2gc_gauntlet', 'crate_cs2gc_anime',
+                                       'crate_cs2gc_karambit', 'crate_cs2gc_vanilla'].indexOf(entry.item_name) !== -1;
             if (slot === 'agent') {
                 // An operation's agent collection shows its own agents; older rows show every agent.
                 const own = String(entry.item_name).startsWith('lootlist:lootlist_cs2gc_agents_') ?
@@ -401,11 +423,11 @@ def patch_previews(source):
     # the existing native InspectModelImage path for fixed/limited goods.
     grid = "                let elModel = elShopTile.FindChild('id-grid-item-model');"
     # An optional preview change must not disable rotation/catalogue controls.
-    artwork = "['crate_cs2gc_anime', 'crate_cs2gc_karambit', 'Name Tag'].indexOf(ShopEntry.item_name) !== -1"
+    artwork = "['crate_cs2gc_anime', 'crate_cs2gc_karambit', 'crate_cs2gc_vanilla', 'Name Tag'].indexOf(ShopEntry.item_name) !== -1"
     source = source.replace(grid, "                if (ShopEntry.local_agent || " + artwork + ") return;\n" + grid, 1)
     create = "    function CreateShopTile(elTilesContainer, itemId, ShopEntry) {"
     agent = '''
-        if (['crate_cs2gc_anime', 'crate_cs2gc_karambit', 'Name Tag'].indexOf(ShopEntry.item_name) !== -1) {
+        if (['crate_cs2gc_anime', 'crate_cs2gc_karambit', 'crate_cs2gc_vanilla', 'Name Tag'].indexOf(ShopEntry.item_name) !== -1) {
             const panel = $.CreatePanel('Panel', elTilesContainer, itemId, {class:'xpshop__inspect-grid__tile'});
             panel.SetHasClass('single-item', true);
             const image = $.CreatePanel('ItemImage', panel, '', {itemid:itemId});

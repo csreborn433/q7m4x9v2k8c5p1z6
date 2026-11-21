@@ -28,7 +28,7 @@ MAINMENU_BETA = """
                 brand.AddClass('stratum-bold-condensed');
                 Object.assign(brand.style, {width:'fill-parent-flow(1)', fontSize:'20px',
                     color:'#ffffff', verticalAlign:'center', letterSpacing:'1px'});
-                const version = $.CreatePanel('Label', indicator, '', {text:'BETA 1.1'});
+                const version = $.CreatePanel('Label', indicator, '', {text:'BETA 1.2'});
                 version.AddClass('stratum-bold-condensed');
                 Object.assign(version.style, {fontSize:'16px', color:'#ffb66d',
                     verticalAlign:'center', padding:'2px 6px', borderRadius:'3px',
@@ -162,7 +162,7 @@ ARMORY_ONLY = """
             const holdsArmory = panel => !!panel.FindChildTraverse('id-btn-open-xpshop');
             column.Children().forEach(child => {
                 if (!holdsArmory(child) && child.id !== 'cs2gc-beta-indicator' && child.id !== 'cs2gc-whatsnew-button' &&
-                    child.id !== 'cs2gc-parties-button')
+                    child.id !== 'cs2gc-parties-button' && child.id !== 'cs2gc-update-banner')
                     _LocalCollapse(child);
             });
             ['id-open-fullscreen-store-btn', 'id-mini-store-carousel', 'id-major-mini-store-carousel',
@@ -259,22 +259,26 @@ WHATS_NEW = """
             const body = $.CreatePanel('Panel', card, 'cs2gc-whatsnew-body');
             Object.assign(body.style, {width: '100%', height: 'fill-parent-flow(1.0)', flowChildren: 'down',
                 overflow: 'squish scroll', padding: '10px 32px 18px 32px'});
-            const agents = $.CreatePanel('Panel', body, 'cs2gc-whatsnew-agents');
-            Object.assign(agents.style, {width:'100%', flowChildren:'right', marginTop:'14px'});
-            data.agents.forEach(agent => {
-                const tile = $.CreatePanel('Panel', agents, '');
-                Object.assign(tile.style, {width:'fill-parent-flow(1)', flowChildren:'down',
-                    margin:'0px 4px', backgroundColor:'#ffffff08', borderRadius:'3px'});
-                const portrait = $.CreatePanel('Image', tile, '', {scaling:'stretch-to-fit-preserve-aspect'});
-                portrait.SetImage('file://{images}/econ/characters/' + agent.icon + '.png');
-                Object.assign(portrait.style, {width:'100%', height:'100px'});
-                const name = _LocalWhatsNewLabel(tile, agent.name, 'stratum-bold-condensed', 18, '#ffffff');
-                Object.assign(name.style, {textAlign:'center', marginBottom:'8px'});
-                const rarity = $.CreatePanel('Panel', tile, '');
-                Object.assign(rarity.style, {width:'100%', height:'3px', backgroundColor:agent.color});
-                tile.hittest = false;
-                tile.hittestchildren = false;
-            });
+            // The anime agent portraits sit directly below their own bulletin (data.agentsAfter).
+            function _LocalWhatsNewAgents() {
+                const agents = $.CreatePanel('Panel', body, 'cs2gc-whatsnew-agents');
+                Object.assign(agents.style, {width:'100%', flowChildren:'right', marginTop:'2px', marginBottom:'12px',
+                    paddingLeft:'17px'});
+                data.agents.forEach(agent => {
+                    const tile = $.CreatePanel('Panel', agents, '');
+                    Object.assign(tile.style, {width:'fill-parent-flow(1)', flowChildren:'down',
+                        margin:'0px 4px', backgroundColor:'#ffffff08', borderRadius:'3px'});
+                    const portrait = $.CreatePanel('Image', tile, '', {scaling:'stretch-to-fit-preserve-aspect'});
+                    portrait.SetImage('file://{images}/econ/characters/' + agent.icon + '.png');
+                    Object.assign(portrait.style, {width:'100%', height:'100px'});
+                    const name = _LocalWhatsNewLabel(tile, agent.name, 'stratum-bold-condensed', 18, '#ffffff');
+                    Object.assign(name.style, {textAlign:'center', marginBottom:'8px'});
+                    const rarity = $.CreatePanel('Panel', tile, '');
+                    Object.assign(rarity.style, {width:'100%', height:'3px', backgroundColor:agent.color});
+                    tile.hittest = false;
+                    tile.hittestchildren = false;
+                });
+            }
             data.sections.forEach(section => {
                 const heading = _LocalWhatsNewLabel(body, section[0], 'stratum-bold-condensed', 22, '#ff9a3c');
                 heading.style.marginTop = '16px';
@@ -290,6 +294,7 @@ WHATS_NEW = """
                     Object.assign(column.style, {width: 'fill-parent-flow(1.0)', flowChildren: 'down'});
                     _LocalWhatsNewLabel(column, entry[0], 'stratum-bold', 18, '#ffffff');
                     _LocalWhatsNewLabel(column, entry[1], 'stratum-regular', 17, '#c9d0da');
+                    if (entry[0] === data.agentsAfter) _LocalWhatsNewAgents();
                 });
             });
             const footer = $.CreatePanel('Panel', card, '');
@@ -671,14 +676,69 @@ PARTIES = """
         }
         _LocalPartiesButton();
 """
+UPDATE_BANNER = """
+        // cs2_gc: the rewards helper writes cfg/cs2gc_update.cfg with "0" or the newer published mod version. The
+        // banner sits at the top of the left column and asks the player to reopen the launcher, which installs mod
+        // updates while CS2 is closed.
+        const _cs2gcUpdateMenu = $.GetContextPanel();
+        function _LocalUpdateVersion() {
+            let value = '';
+            try { value = String(GameInterfaceAPI.GetSettingString('cs2gc_update') || ''); } catch (e) {}
+            return /^[0-9][0-9A-Za-z.+-]{0,31}$/.test(value) && value !== '0' ? value : '';
+        }
+        function _LocalUpdateBanner() {
+            const column = _cs2gcUpdateMenu.FindChildTraverse('JsLeftColumn');
+            if (!column) return;
+            const version = _LocalUpdateVersion();
+            let banner = column.FindChildTraverse('cs2gc-update-banner');
+            if (!banner) {
+                if (!version) return;
+                banner = $.CreatePanel('Panel', column, 'cs2gc-update-banner');
+                Object.assign(banner.style, {width: '256px', marginBottom: '8px', flowChildren: 'down',
+                    padding: '10px 14px', borderRadius: '4px', border: '1px solid #ffffff33',
+                    backgroundColor: 'gradient(linear, 0% 0%, 100% 0%, from(#ff8a1f), to(#e8326e))'});
+                const title = _LocalWhatsNewLabel(banner, 'UPDATE AVAILABLE', 'stratum-bold-condensed', 20, '#ffffff');
+                title.style.letterSpacing = '1px';
+                banner.__cs2gcVersion = _LocalWhatsNewLabel(banner, '', 'stratum-bold-condensed', 16, '#fff3e6');
+                _LocalWhatsNewLabel(banner, 'Close CS2 and reopen the CSReborn launcher to install it. ' +
+                    'Your stars and inventory are kept.', 'stratum-regular', 14, '#ffffff').style.marginTop = '4px';
+                banner.hittest = false;
+                banner.hittestchildren = false;
+            }
+            banner.visible = !!version;
+            banner.style.visibility = version ? 'visible' : 'collapse';
+            if (!version) return;
+            banner.__cs2gcVersion.text = 'Version ' + version + ' is ready to download';
+            const parties = column.FindChildTraverse('cs2gc-parties-button');
+            const whatsNew = column.FindChildTraverse('cs2gc-whatsnew-button');
+            if (parties || whatsNew) column.MoveChildAfter(banner, parties || whatsNew);
+        }
+        // Shows the answer of the previous exec, then queues the next read (cfg values arrive once the exec runs).
+        function _LocalUpdateTick() {
+            if (!_cs2gcUpdateMenu.IsValid()) return;
+            if (m_localMenuVisible && !_LocalInMatch()) {
+                _LocalUpdateBanner();
+                GameInterfaceAPI.ConsoleCommand('exec cs2gc_update');
+            }
+            $.Schedule(15, _LocalUpdateTick);
+        }
+        if (!_cs2gcUpdateMenu.__cs2gcUpdateLoop) {
+            _cs2gcUpdateMenu.__cs2gcUpdateLoop = true;
+            $.Schedule(3, _LocalUpdateTick);
+        }
+        _LocalUpdateBanner();
+"""
 
 
 def whats_new_script():
-    from whats_new import DISPLAY_VERSION, SEEN_ID, SECTIONS, SUBTITLE, TITLE
+    from whats_new import AGENTS_AFTER, DISPLAY_VERSION, SEEN_ID, SECTIONS, SUBTITLE, TITLE
     from native_agents import AGENTS, DISPLAY_NAMES, PREFIX
+    if AGENTS_AFTER not in [lead for _, entries in SECTIONS for lead, _ in entries]:
+        raise ValueError("What's New has no bulletin for the agent portraits: " + AGENTS_AFTER)
     colors = {'mythical': '#8847ff', 'legendary': '#d32ce6', 'ancient': '#eb4b4b'}
     data = {'title': TITLE, 'subtitle': SUBTITLE, 'sections': [[header, [list(entry) for entry in entries]]
                                                                 for header, entries in SECTIONS],
+            'agentsAfter': AGENTS_AFTER,
             'agents': [dict(name=DISPLAY_NAMES[title], icon=PREFIX + title.lower(), color=colors[rarity])
                        for title, _, rarity in AGENTS]}
     return (WHATS_NEW.replace('__SEEN__', json.dumps(SEEN_ID)).replace('__DATA__', json.dumps(data))
@@ -702,12 +762,12 @@ HUD_SMOKE_SYNC = """
         if (!smokeContext.__cs2gcSmokeSync) {
             smokeContext.__cs2gcSmokeSync = true;
             let previousSmoke = '';
+            // Thrown smokes always follow the HUD colour chosen in NEW SETTINGS (cl_hud_color).
             function syncHudSmoke() {
                 if (!smokeContext.IsValid()) return;
-                const on = GameInterfaceAPI.GetSettingString('ui_cs2gc_smoke') === '1' ? '1' : '0';
                 const hue = String(GameInterfaceAPI.GetSettingString('cl_hud_color'));
                 if (/^(?:[0-9]|1[0-2])$/.test(hue)) {
-                    const value = on + ':' + hue;
+                    const value = '1:' + hue;
                     if (value !== previousSmoke) {
                         // Quoted: the console tokenizer splits on ':', and setinfo rejects extra arguments.
                         GameInterfaceAPI.ConsoleCommand('setinfo cs2gc_smoke "' + value + '"');
@@ -811,6 +871,92 @@ WATCH_SETTINGS = """
         return row;
     }
 
+    // cs2_gc: HUD colour dropdown (official cl_hud_color values and English names). Smokes always use this colour.
+    const _cs2gcHudColours = [
+        ['Team Color', 'gradient(linear, 0% 0%, 100% 0%, from(#ff9d3f), color-stop(.5, #ff9d3f), color-stop(.5, #5082ff), to(#5082ff))'],
+        ['White', '#e1e1e1'], ['Bright White', '#ffffff'], ['Light Blue', '#80c3ff'], ['Blue', '#5082ff'],
+        ['Purple', '#ab71ff'], ['Red', '#ff5050'], ['Orange', '#ff9d3f'], ['Yellow', '#ffe650'],
+        ['Green', '#73d25a'], ['Aqua', '#50e1d2'], ['Pink', '#ff80cb'],
+        ['Teammate Color', 'gradient(linear, 0% 0%, 100% 0%, from(#ffe650), color-stop(.25, #ab71ff), color-stop(.5, #73d25a), color-stop(.75, #5082ff), to(#ff9d3f))']];
+    function _LocalHudColourMenu(parent) {
+        const wrap = $.CreatePanel('Panel', parent, 'CS2GCHudColourMenu');
+        Object.assign(wrap.style, {flowChildren:'down', width:'100%', marginTop:'12px'});
+        const row = $.CreatePanel('Button', wrap, 'CS2GCHudColourButton');
+        Object.assign(row.style, {flowChildren:'right', width:'100%', margin:'0px',
+            padding:'16px 20px', backgroundColor:'rgba(0,0,0,0.35)', borderRadius:'4px'});
+        const text = $.CreatePanel('Panel', row, '');
+        Object.assign(text.style, {flowChildren:'down', width:'fill-parent-flow(1)', verticalAlign:'center'});
+        const title = $.CreatePanel('Label', text, '', {text:'HUD & SMOKE COLOUR'});
+        title.AddClass('stratum-regular-condensed');
+        Object.assign(title.style, {fontSize:'20px', color:'white', fontWeight:'medium'});
+        const about = $.CreatePanel('Label', text, '', {text:'Your HUD colour. Your thrown smokes always use the same colour, ' +
+            'and everyone sees it on local CS-Reborn servers. Team Color: orange T, blue CT.'});
+        Object.assign(about.style, {fontSize:'15px', color:'#a5b1bd', marginTop:'4px'});
+        const current = $.CreatePanel('Panel', row, '');
+        Object.assign(current.style, {flowChildren:'right', verticalAlign:'center', marginLeft:'24px', padding:'6px 10px',
+            backgroundColor:'rgba(0,0,0,0.45)', borderRadius:'4px', border:'1px solid rgba(255,255,255,0.18)'});
+        const swatch = $.CreatePanel('Panel', current, 'CS2GCHudColourSwatch');
+        Object.assign(swatch.style, {width:'18px', height:'18px', borderRadius:'50%', verticalAlign:'center',
+            border:'1px solid rgba(255,255,255,0.35)'});
+        const name = $.CreatePanel('Label', current, 'CS2GCHudColourName', {text:''});
+        Object.assign(name.style, {fontSize:'17px', color:'white', marginLeft:'10px', minWidth:'120px', verticalAlign:'center'});
+        const arrow = $.CreatePanel('Label', current, 'CS2GCHudColourArrow', {text:'▼'});
+        Object.assign(arrow.style, {fontSize:'13px', color:'#a5b1bd', marginLeft:'8px', verticalAlign:'center'});
+        const list = $.CreatePanel('Panel', wrap, 'CS2GCHudColourOptions');
+        Object.assign(list.style, {flowChildren:'down', width:'100%', marginTop:'4px', padding:'6px 0px',
+            backgroundColor:'rgba(0,0,0,0.55)', borderRadius:'4px'});
+        list.visible = false;
+        let chosen = null;
+        const read = () => {
+            const value = String(GameInterfaceAPI.GetSettingString('cl_hud_color'));
+            return /^(?:[0-9]|1[0-2])$/.test(value) ? Number(value) : 0;
+        };
+        const options = _cs2gcHudColours.map(([label, colour], index) => {
+            const option = $.CreatePanel('Button', list, 'CS2GCHudColour' + index);
+            Object.assign(option.style, {flowChildren:'right', width:'100%', padding:'7px 20px'});
+            const dot = $.CreatePanel('Panel', option, '');
+            Object.assign(dot.style, {width:'16px', height:'16px', borderRadius:'50%', verticalAlign:'center',
+                backgroundColor:colour, border:'1px solid rgba(255,255,255,0.35)'});
+            const optionName = $.CreatePanel('Label', option, '', {text:label});
+            Object.assign(optionName.style, {fontSize:'17px', color:'white', marginLeft:'12px',
+                width:'fill-parent-flow(1)', verticalAlign:'center'});
+            const mark = $.CreatePanel('Label', option, '', {text:'✓'});
+            Object.assign(mark.style, {fontSize:'17px', color:'#7ec27f', verticalAlign:'center'});
+            option.__cs2gcMark = mark;
+            option.SetPanelEvent('onactivate', () => {
+                GameInterfaceAPI.SetSettingString('cl_hud_color', String(index));
+                if (String(GameInterfaceAPI.GetSettingString('cl_hud_color')) !== String(index))
+                    GameInterfaceAPI.ConsoleCommand('cl_hud_color ' + index);
+                $.Msg('CS2GC HUD colour ' + index);
+                chosen = index;
+                list.visible = false;
+                show();
+            });
+            option.SetPanelEvent('onmouseover', () => { option.style.backgroundColor = 'rgba(255,255,255,0.07)'; });
+            option.SetPanelEvent('onmouseout', () => show());
+            return option;
+        });
+        function show() {
+            const selected = chosen === null ? read() : chosen;
+            swatch.style.backgroundColor = _cs2gcHudColours[selected][1];
+            name.text = _cs2gcHudColours[selected][0];
+            arrow.text = list.visible ? '▲' : '▼';
+            options.forEach((option, index) => {
+                option.style.backgroundColor = index === selected ? 'rgba(255,255,255,0.10)' : 'none';
+                option.__cs2gcMark.visible = index === selected;
+            });
+        }
+        show();
+        row.SetPanelEvent('onactivate', () => {
+            chosen = null;  // re-read: the HUD colour may have changed in the game's own settings
+            list.visible = !list.visible;
+            show();
+        });
+        row.SetPanelEvent('onmouseover', () => { row.style.backgroundColor = 'rgba(255,255,255,0.07)'; });
+        row.SetPanelEvent('onmouseout', () => { row.style.backgroundColor = 'rgba(0,0,0,0.35)'; });
+        return wrap;
+    }
+
     function _LocalShowNewSettings() {
         const radio = $('#WatchNavBarYourMatches');
         const panel = $('#JsYourMatches');
@@ -846,11 +992,7 @@ WATCH_SETTINGS = """
             graphicsHeading.AddClass('stratum-regular-condensed');
             Object.assign(graphicsHeading.style, {fontSize:'24px', color:'white', marginBottom:'12px'});
             _LocalAnimationToggle(gameplay);
-            _LocalSettingsToggle(gameplay, 'CS2GCHudSmokeToggle', 'USE HUD COLOUR FOR SMOKE',
-                'Everyone sees your thrown smoke in your HUD colour. Team colour: orange T, blue CT. Local CS-Reborn servers.',
-                'ui_cs2gc_smoke', false, GameInterfaceAPI.GetSettingString('ui_cs2gc_smoke') === '1',
-                ['New smokes use your HUD colour', 'Normal smoke colour'])
-                .style.marginTop = '12px';
+            _LocalHudColourMenu(gameplay);
             _LocalSettingsToggle(graphics, 'CS2GCLowEndGraphicsToggle', 'ENABLE LOW END PC GRAPHICS',
                 'Reduces particles, fog, microshadows, smoke shadows, distant props, textures and old ragdolls. Restart CS2 to apply.',
                 'ui_low_end_pc', _cs2gcGraphicsBoot, _cs2gcGraphicsBoot);
@@ -918,7 +1060,7 @@ def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
                           HIDE_NEW_POPULAR + HIDE_CLIENT_UPDATE_BUTTON +
                           (ARMORY_ONLY if hide_promo else "") +
                           MENU_REFRESH.replace('__ARMORY__', '_LocalKeepOnlyArmory();' if hide_promo else '') +
-                          whats_new_script() + PARTIES, 1)
+                          whats_new_script() + PARTIES + UPDATE_BANNER, 1)
     source=source.replace(HIDE_ANCHOR, HIDE_ANCHOR + '''
         m_localMenuVisible = false;
         if (m_localMenuTimer !== null) {

@@ -357,6 +357,13 @@ def run_with_parent(args, parent):
         combat=CombatEvents(rewards,args.parent_pid)
         from native_newsettings import NewSettingsBridge
         new_settings = NewSettingsBridge(args.cfg_dir) if args.cfg_dir and args.parent_pid else None
+        update_notice = None
+        if args.cfg_dir and args.parent_pid:
+            import update_notice as notice
+            try:
+                update_notice = notice.start(args.proxy_dir, args.cfg_dir)
+            except OSError as error:
+                print('Update notice unavailable: ' + str(error), flush=True)
         def after_request():
             combat.poll()
             if new_settings: new_settings.poll()
@@ -372,6 +379,7 @@ def run_with_parent(args, parent):
                 print('No game data for 30 seconds. Check that CS2 is running with the installed GSI config.', flush=True)
 
         serve_until_parent_exits(server, parent, after_request)
+        if update_notice: update_notice.set()
         if new_settings: new_settings.poll()  # a choice made just before quitting
         print('CS2 closed; rewards helper stopped.', flush=True)
 

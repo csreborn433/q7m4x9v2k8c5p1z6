@@ -24,6 +24,16 @@ BIN_PREFIX = 'game/bin/win64/'
 PYTHON_PREFIX = BIN_PREFIX + 'cs2_gc_python/'
 MANIFEST_PATH = BIN_PREFIX + 'cs2_gc_release.json'
 SUPPORTED_STEAM_BUILD = '25966348'
+# Player progress, statistics and settings in the bin folder. A published update may never create or replace them,
+# so installing an update cannot reset stars or inventory (package_release refuses to ship them as well).
+PLAYER_DATA = frozenset((
+    'cs2_gc_inventory.txt', 'cs2_gc_gsi_state.json', 'cs2_gc_rewards.txt', 'cs2_gc_matches.txt',
+    'cs2_gc_premier.txt', 'cs2_gc_finish_ids.json', 'cs2_gc_gun_collections.json', 'cs2_gc_skin_families.txt',
+    'cs2_gc_console.txt', 'cs2_gc_console_boot.txt', 'cs2_gc_gameplay.cfg', 'cs2_gc.cfg',
+    'cs2_gc_reward_stars.txt', 'cs2_gc_pets.json', 'cs2_gc_mission_session.txt', 'cs2_gc_mission_current.txt',
+    'cs2_gc_combat_session.json', 'cs2_gc_combat_events.json'))
+BACKUP_LABEL = 'Before-Update'
+BACKUPS_KEPT = 5
 
 
 class UpdateError(ValueError):
@@ -90,6 +100,8 @@ def _file_manifest(data, release_commit):
         )
         if not (name == 'Launch CS2 GC.exe' or allowed_mod_file):
             raise UpdateError('The update manifest attempts to replace a file outside the mod payload.')
+        if relative.casefold() in PLAYER_DATA:
+            raise UpdateError('The update manifest attempts to replace player progress: ' + name)
         if name.startswith('CS2 GC Saves/') or not isinstance(expected, str) or not re.fullmatch(r'[0-9a-f]{64}', expected):
             raise UpdateError('The update manifest has an invalid file checksum.')
     if MANIFEST_PATH in files:
@@ -193,6 +205,7 @@ def install_archive(archive_path, root, release_commit, game_closed_check=None):
                 else:
                     game_closed_check()
 
+                backup_progress(root)
                 ordered_names = sorted(
                     name for name in expected_files
                     if name != MANIFEST_PATH and not name.startswith(PYTHON_PREFIX))
@@ -210,6 +223,28 @@ def _feed_file_url(name, digest, feed_commit):
     return RAW_BASE_URL + feed_commit + '/files/' + quote(name, safe='/') + '?v=' + digest
 
 
+def backup_progress(root):
+    """A Before-Update copy of the player's progress in "CS2 GC Saves", keeping the newest BACKUPS_KEPT.
+
+    Updates never touch progress files (PLAYER_DATA); this copy is an extra safeguard, so a failure is reported
+    without blocking the update. The caller has checked that CS2 and the rewards helper are closed."""
+    proxy = Path(root) / Path(*PurePosixPath(BIN_PREFIX).parts)
+    if not (proxy / 'cs2_gc_inventory.txt').is_file():
+        return None
+    try:
+        import progress_saves
+        target = progress_saves.snapshot(proxy, label=BACKUP_LABEL, strict=False)
+        old = sorted(target.parent.glob(BACKUP_LABEL + '-*.zip'), key=lambda path: path.stat().st_mtime, reverse=True)
+        for path in old[BACKUPS_KEPT:]:
+            if path != target:
+                path.unlink(missing_ok=True)
+    except (ImportError, OSError, ValueError, KeyError, zipfile.BadZipFile) as error:
+        print('Progress backup skipped: ' + str(error), flush=True)
+        return None
+    print('Progress backed up: ' + target.name, flush=True)
+    return target
+
+
 def _updated_manifest(current, feed, files):
     updated = dict(current)
     merged_files = dict(current['files'])
@@ -225,10 +260,10 @@ def _updated_manifest(current, feed, files):
     return (json.dumps(updated, indent=2) + '\n').encode('utf-8')
 
 
-def check_for_updates(root, opener=None, install=True, game_closed_check=None):
+def _compare_with_feed(root, opener):
+    """(current, manifest path, feed, feed files, feed revision, changed files); None for a local test build."""
     if opener is None:
         opener = urllib.request.build_opener().open
-    root = Path(root).resolve()
     local_manifest = root / Path(*PurePosixPath(MANIFEST_PATH).parts)
     try:
         current = json.loads(local_manifest.read_text(encoding='utf-8'))
@@ -244,8 +279,7 @@ def check_for_updates(root, opener=None, install=True, game_closed_check=None):
             current_build.get('steam_build') != SUPPORTED_STEAM_BUILD):
         raise UpdateError('The installed release manifest targets a different CS2 build.')
     if current.get('local_test') is True:
-        print('Local test build: public updates are disabled. Install a normal release launcher to resume them.', flush=True)
-        return False
+        return None
 
     try:
         feed = _read_json(FEED_URL + '?cache=' + os.urandom(8).hex(), opener)
@@ -275,6 +309,25 @@ def check_for_updates(root, opener=None, install=True, game_closed_check=None):
         destination = root / Path(*PurePosixPath(name).parts)
         if current_files.get(name) != expected or not destination.is_file():
             changed.append((name, expected))
+    return current, local_manifest, feed, feed_files, feed_commit, changed
+
+
+def pending_update(root, opener=None):
+    """The published mod version that reopening the launcher would install, or None when nothing would change."""
+    plan = _compare_with_feed(Path(root).resolve(), opener)
+    return plan[2]['version'] if plan is not None and plan[5] else None
+
+
+def check_for_updates(root, opener=None, install=True, game_closed_check=None):
+    if opener is None:
+        opener = urllib.request.build_opener().open
+    root = Path(root).resolve()
+    plan = _compare_with_feed(root, opener)
+    if plan is None:
+        print('Local test build: public updates are disabled. Install a normal release launcher to resume them.', flush=True)
+        return False
+    current, local_manifest, feed, feed_files, feed_commit, changed = plan
+    commit = feed['commit']
 
     if not changed:
         print('Mod is up to date.', flush=True)
@@ -329,6 +382,7 @@ def check_for_updates(root, opener=None, install=True, game_closed_check=None):
             else:
                 game_closed_check()
 
+            backup_progress(root)
             for name, source in sorted(staged_files):
                 destination = root / Path(*PurePosixPath(name).parts)
                 destination.parent.mkdir(parents=True, exist_ok=True)

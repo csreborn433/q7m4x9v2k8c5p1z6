@@ -14,6 +14,7 @@ import urllib.error
 import urllib.request
 import zipfile
 from make_proxy_def import export_names, OVERRIDDEN
+from launcher_update import PLAYER_DATA
 
 PYTHON_URL = 'https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip'
 BIN = 'game/bin/win64/'
@@ -133,6 +134,8 @@ def build_archive(root, runtime_data, bot_files, *, local_test=False):
         def add(name,data):
             if name in seen:
                 raise ValueError('Duplicate release path: '+name)
+            if name.startswith(BIN) and name[len(BIN):].casefold() in PLAYER_DATA:
+                raise ValueError('Player progress must never enter the release ZIP: '+name)
             seen.add(name)
             archive.writestr(name,data)
             if name.startswith(BIN) or name == 'Launch CS2 GC.exe':

@@ -36,7 +36,7 @@ ICON = Path(__file__).resolve().parent / 'cs2_gc_black_market_case.png'
 # vanilla only, no key. A fixed id, so the owned copy keeps its definition when other cases come and go.
 VANILLA_CASE_NAME = 'crate_cs2gc_vanilla'
 VANILLA_CASE_TITLE = 'Vanilla Case'
-VANILLA_CASE_DESCRIPTION = ('A one-time gift that opens without a key. It holds every knife, always in its vanilla '
+VANILLA_CASE_DESCRIPTION = ('Opens without a key. It holds every knife, always in its vanilla '
                             'finish, with a random chance of StatTrak.')
 VANILLA_CASE_ID = '54000'
 VANILLA_ICON = Path(__file__).resolve().parent / 'cs2_gc_vanilla_case.png'

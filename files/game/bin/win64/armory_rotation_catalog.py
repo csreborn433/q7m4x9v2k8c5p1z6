@@ -25,6 +25,11 @@ COMMUNITY_CAPSULES = ('crate_sticker_pack_cs20_capsule', 'crate_sticker_pack_csg
 LIMITED_PRICES = {'set_xpshop_wpn_01': 25, 'set_xpshop_wpn_02': 15,
                   'set_xpshop_wpn_03': 25, 'set_xpshop_wpn_04': 125}
 LIMITED_LISTS = tuple(LIMITED_PRICES)
+# Our generated cases sold in fixed case tiles (user, v1.2): Vanilla knife case 15, Gauntlet glove case 5.
+# The Karambit Case keeps its definition for owned copies but is no longer sold.
+CUSTOM_CASE_PRICES = {'crate_cs2gc_vanilla': 15, 'crate_cs2gc_gauntlet': 5}
+# Fixed tile prices that differ from their category price.
+FIXED_PRICES = {'lootlist:set_realism_camo': 10, 'Name Tag': 1}
 # Cases never offered in the Armory rotation. crate_community_4 is the Operation Breakout
 # Weapon Case; the user wants a different case in its slot (everything else unchanged).
 ROTATION_EXCLUDED_CASES = {'crate_community_4'}
@@ -61,6 +66,7 @@ def catalogue(source, config):
 
     def add(name, slot, cost, template=None):
         if name in goods: return
+        cost = FIXED_PRICES.get(name, cost)
         values = dict(template or {})
         values.update(item_name=name, points=str(cost), local_rotation_slot=slot)
         values['ui_order'] = {'collection': '2', 'charm': '1', 'sticker': '1', 'souvenir': '3', 'case': '3', 'capsule': '3', 'limited': '2', 'agent': '2', 'tool': '2', 'terminal': '3'}[slot]
@@ -71,7 +77,7 @@ def catalogue(source, config):
     for key, value in campaign:
         if key != 'operational_point_redeemable' or not isinstance(value, list): continue
         data = as_dict(value); name = data['item_name']
-        if name == 'crate_cs2gc_gauntlet' or data.get('local_rotation_slot') == 'agent':
+        if name in CUSTOM_CASE_PRICES or name == 'crate_cs2gc_karambit' or data.get('local_rotation_slot') == 'agent':
             continue
         if name == 'lootlist:removed_items' and (not config['armory_howl_enabled'] or anime_case): continue
         if not all(isinstance(v, str) for v in data.values()): raise ValueError('Unknown nested Armory goods field')
@@ -89,12 +95,11 @@ def catalogue(source, config):
         cost = LIMITED_PRICES.get(name.removeprefix('lootlist:'), int(data['points'])) if slot == 'limited' else int(data['points'])
         # Sale values are balanced against these prices (gameplay_config.balance): every weapon case costs
         # armory_case_price, and native tiles are never cheaper than the catalogue's own tile prices.
-        if slot == 'case': cost = 30 if name == 'crate_cs2gc_karambit' else 5
+        if slot == 'case': cost = 5
         if slot == 'terminal': cost = 5
         price = {'collection': COLLECTION_PRICE, 'charm': CHARM_PRICE, 'sticker': STICKER_PRICE,
                  'capsule': STICKER_PRICE if name.startswith('crate_sticker_pack_') else CAPSULE_PRICE}.get(slot)
         if price: cost = price
-        if name == 'Name Tag': cost = 1
         if name == 'lootlist:removed_items': cost = max(100, config['armory_howl_star_price'])
         add(name, slot, cost, data)
     templates = {v['local_rotation_slot']: v for v in goods.values()}
@@ -106,8 +111,9 @@ def catalogue(source, config):
         price = config.get('black_market_price', 55) if config.get('sell_flat_stars') else max(
             config.get('black_market_price', 55), config.get('sell_knife_glove', 72)*wear_max//100 + 1)
         add('crate_cs2gc_black_market', 'limited', price, {'flags': '2'})
-        if 'crate_cs2gc_karambit' in items:
-            add('crate_cs2gc_karambit', 'case', 30, {'flags': '2'})
+    for name, price in CUSTOM_CASE_PRICES.items():
+        if name == 'crate_cs2gc_gauntlet' and not config.get('glove_finishes', 1): continue
+        if name in items: add(name, 'case', price, {'flags': '2'})
     if 'Name Tag' in items:
         add('Name Tag', 'tool', 1)
 
