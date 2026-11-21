@@ -22,6 +22,8 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'plugins' / 'CS2GCMatchBridge.cs'
 RULES = ROOT / 'plugins' / 'MatchFlowRules.cs'
+VISUALS = ROOT / 'plugins' / 'GameplayVisualRules.cs'
+CAMERA = ROOT / 'plugins' / 'FirstPersonDeathCamera.cs'
 OUT = ROOT / 'build' / 'match'
 PLUGIN = 'CS2GCMatchBridge'
 
@@ -40,6 +42,8 @@ CSPROJ = '''<Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <Compile Include="__SOURCE__" />
     <Compile Include="__RULES__" />
+    <Compile Include="__VISUALS__" />
+__CAMERA__
 __REFS__
   </ItemGroup>
 </Project>
@@ -94,7 +98,8 @@ def main():
         ref_xml = '\n'.join('    <Reference Include="%s"><HintPath>%s</HintPath></Reference>' % (p.stem, p.resolve()) for p in refs)
         proj = scratch / 'match.csproj'
         proj.write_text(CSPROJ.replace('__NAME__', PLUGIN).replace('__SOURCE__', str(SOURCE))
-                        .replace('__RULES__', str(RULES)).replace('__REFS__', ref_xml),
+                        .replace('__RULES__', str(RULES)).replace('__VISUALS__', str(VISUALS))
+                        .replace('__CAMERA__', '    <Compile Include="%s" />' % CAMERA).replace('__REFS__', ref_xml),
                         encoding='utf-8')
         result = subprocess.run([str(Path(dotnet).resolve()), 'build', str(proj), '-c', 'Release'], capture_output=True, text=True)
         if result.returncode != 0:

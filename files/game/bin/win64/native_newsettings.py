@@ -16,11 +16,25 @@ LEGACY_LOW_END = [('r_shadows', '0', '1'), ('r_dynamic', '0', '1'), ('r_particle
            ('r_fog', '0', '1'), ('r_3dsky', '0', '1'), ('r_texturefilteringquality', '0', '2'),
            ('r_texture_stream_max_resolution', '128', '0'), ('fps_max', '0', '400'),
            ('fps_max_ui', '60', '120')]
-LOW_END = LEGACY_LOW_END[:-2]
+PREVIOUS_LOW_END = [('r_shadows', '0', '1'), ('r_dynamic', '0', '1'), ('r_particle_max_detail_level', '0', '2'),
+           ('r_particle_shadows', '0', '1'), ('r_propsmaxdist', '100', '1200'), ('r_drawskybox', '0', '1'),
+           ('r_drawdecals', '0', '1'), ('r_drawtracers', '0', '1'), ('r_csgo_cmaa_quality', '0', '1'),
+           ('r_fog', '0', '1'), ('r_3dsky', '0', '1'), ('r_texturefilteringquality', '0', '2'),
+           ('r_texture_stream_max_resolution', '64', '0')]
+# Verified with this client's help output: no removed or cheat-protected controls, and the texture minimum is 512.
+LOW_END = [('r_particle_max_detail_level', '0', '3'), ('r_particle_shadows', '0', '1'),
+           ('r_propsmaxdist', '100', '1200'), ('r_csgo_cmaa_quality', '0', '3'),
+           ('r_texturefilteringquality', '0', '1'), ('r_texture_stream_max_resolution', '512', '2048'),
+           ('r_csgo_enable_volume_fog', '0', '1'), ('r_csgo_enable_cubemap_fog', '0', '1'),
+           ('r_csgo_enable_gradient_fog', '0', '1'), ('r_csgo_microshadowing', '0', '1'),
+           ('r_csgo_smoke_shadow', '0', '1'), ('r_csgo_mixed_resolution_particles', '1', '1'),
+           ('cl_ragdoll_limit', '8', '20')]
 PREVIOUS_FRAME_LIMITS = [('fps_max', '400', '400'), ('fps_max_ui', '60', '120')]
 DEFAULT_FRAME_LIMITS = [('fps_max', '222'), ('fps_max_ui', '99')]
 LOW_END_JS = '[' + ','.join("['%s','%s','%s']" % row for row in LOW_END) + ']'
-DEFAULTS = {'ui_low_end_pc': '0', 'ui_cs2gc_buymenu': 'cs2', 'ui_cs2gc_animations': 'cs2', 'ui_cs2gc_whatsnew': '0'}
+DEFAULTS = {'ui_low_end_pc': '0', 'ui_cs2gc_buymenu': 'cs2', 'ui_cs2gc_animations': 'cs2',
+            'ui_cs2gc_whatsnew': '0', 'ui_cs2gc_smoke': '0'}
+PREVIOUS_KEYS = tuple(key for key in DEFAULTS if key != 'ui_cs2gc_smoke')
 WHEEL_FOLDER = 'cs2_gc_buymenu_wheel'
 WHEEL_COMMENT = 'cs2_gc original buy wheel'
 WHEEL_OWNER = 'cs2-gc-original-buy-wheel-v1'
@@ -65,7 +79,7 @@ SETTINGS_SCRIPT = r'''
         const h=$.CreatePanel('Label',content,'',{text:'NEW'});
         h.AddClass('SettingsSectionTitleLabel');
         const lowOn=GameInterfaceAPI.GetSettingString('ui_low_end_pc')==='1';
-        _CS2GCSection(content,'MAX PERFORMANCE','Reduces world detail and uncaps in-game FPS, while capping the main menu at 60 FPS.');
+        _CS2GCSection(content,'MAX PERFORMANCE','Aggressively reduces world detail, effects, particles, decals and texture streaming while keeping the current frame limits.');
         _CS2GCChoiceRow(content,[
             ['OFF',!lowOn,()=>{_CS2GCSetting('ui_low_end_pc','0');_CS2GCApplyLowEnd(false);_CS2GCBuildNewSettings(panel);}],
             ['ON',lowOn,()=>{_CS2GCSetting('ui_low_end_pc','1');_CS2GCApplyLowEnd(true);_CS2GCBuildNewSettings(panel);}]
@@ -294,7 +308,7 @@ def prepare_animations(directory, values):
 SETTINGS_CFG = 'cs2_gc_newsettings.cfg'
 # ui_cs2gc_whatsnew only accepts this release's id: an older id is dropped, so the window shows after an update.
 ALLOWED = {'ui_low_end_pc': ('0', '1'), 'ui_cs2gc_buymenu': ('cs2', 'csgo'), 'ui_cs2gc_animations': ('cs2', 'csgo'),
-           'ui_cs2gc_whatsnew': ('0', WHATS_NEW_SEEN)}
+           'ui_cs2gc_whatsnew': ('0', WHATS_NEW_SEEN), 'ui_cs2gc_smoke': ('0', '1')}
 LEGACY_KEYS = ('ui_cs2gc_buymenu', 'ui_low_end_pc')  # the only keys files from before the animation toggle hold
 LINE = re.compile(rb'CS2GC_SETTING (' + b'|'.join(re.escape(key.encode()) for key in sorted(ALLOWED)) + rb') (\w+)')
 
@@ -322,13 +336,25 @@ def _legacy_settings_cfg(values, *, graphics, keys):
 def ensure_settings_cfg(cfg_dir):
     path = Path(cfg_dir) / SETTINGS_CFG
     if path.exists():
-        current = read_text(path)
+        original = read_text(path)
+        current = re.sub(r'(?m)^[ \t]*setinfo[ \t]+ui_cs2gc_deathcam[ \t]+[01][ \t]*\r?(?:\n|$)', '', original)
+        if current != original:
+            atomic_write(path, current)
         values = read_settings(cfg_dir)
-        previous_presets = (LEGACY_LOW_END, LOW_END, PREVIOUS_FRAME_LIMITS)
+        previous = re.sub(r'(?m)^setinfo ui_cs2gc_whatsnew \w+$',
+                          'setinfo ui_cs2gc_whatsnew ' + values.get('ui_cs2gc_whatsnew', '0'),
+                          current.replace('\r\n', '\n'))
+        if previous == settings_cfg(values, graphics=PREVIOUS_LOW_END, keys=PREVIOUS_KEYS):
+            backup = path.with_suffix(path.suffix + '.pre-graphics-refresh.bak')
+            if not backup.exists():
+                atomic_write(backup, current)
+            atomic_write(path, settings_cfg(values))
+            return 'owned graphics preset refreshed with backup'
+        previous_presets = (LEGACY_LOW_END, PREVIOUS_LOW_END, LOW_END, PREVIOUS_FRAME_LIMITS)
         legacy = {
             _legacy_settings_cfg(values, graphics=graphics, keys=keys)
             for graphics in previous_presets
-            for keys in (ALLOWED, LEGACY_KEYS)
+            for keys in (ALLOWED, PREVIOUS_KEYS, LEGACY_KEYS)
         }
         if current.replace('\r\n', '\n') in legacy:
             migrated = dict(values, ui_low_end_pc='0')
@@ -342,14 +368,17 @@ def ensure_settings_cfg(cfg_dir):
             for match in re.finditer(r'(?im)^\s*(fps_max(?:_ui)?)\s+\S+', current)
         }
         missing_limits = [limit for limit in DEFAULT_FRAME_LIMITS if limit[0] not in configured_limits]
-        if missing_limits:
+        missing_gameplay = [key for key in ('ui_cs2gc_smoke',)
+                            if not re.search(r'(?m)^\s*setinfo\s+' + key + r'\s+', current)]
+        if missing_limits or missing_gameplay:
             contents = current.rstrip('\r\n')
             if contents:
                 contents += '\n'
             contents += '\n'.join('%s %s' % limit for limit in missing_limits) + '\n'
+            contents += ''.join('setinfo %s 0\n' % key for key in missing_gameplay)
             atomic_write(path, contents)
-            return 'saved settings preserved; default frame limits added'
-        return 'saved settings preserved'
+            return 'saved settings preserved; default frame limits added' if missing_limits else 'saved settings preserved; gameplay defaults added'
+        return 'obsolete death-view toggle removed; other saved settings preserved' if current != original else 'saved settings preserved'
     atomic_write(path, settings_cfg(DEFAULTS))
     return 'balanced frame-limit defaults created'
 
@@ -389,7 +418,11 @@ class NewSettingsBridge:
                     self.values[key] = value
                     changed = True
         if changed:
-            atomic_write(self.cfg_dir / SETTINGS_CFG, settings_cfg(self.values))
+            path = self.cfg_dir / SETTINGS_CFG
+            contents = settings_cfg(self.values)
+            for name, value in re.findall(r'(?im)^\s*(fps_max(?:_ui)?)\s+(\d+(?:\.\d+)?)\s*$', read_text(path)):
+                contents = re.sub(r'(?m)^' + name.lower() + r' \S+$', name.lower() + ' ' + value, contents)
+            atomic_write(path, contents)
         return changed
 
     def poll(self):

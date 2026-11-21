@@ -3,12 +3,12 @@ DEFAULTS = {
     'custom_collection_drop_percent': 15,
     'end_match_screens': 1, 'end_match_duration': 20, 'match_end_delay': 45,
     'armory_collection_slots': 3,
-    'armory_charm_slots': 2,
-    'free_case_keys': 1, 'skip_key_selection': 1, 'knife_finishes': 1, 'glove_finishes': 1, 'custom_skins_test': 1, 'custom_collections': 0, 'custom_cases': 0, 'armory_chicken_cosmetics': 0, 'custom_collection_tradeups': 1, 'glove_panel_variants': 1, 'black_market_price': 100,
+    'armory_charm_slots': 1,
+    'free_case_keys': 1, 'skip_key_selection': 1, 'knife_finishes': 1, 'glove_finishes': 1, 'custom_skins_test': 1, 'custom_collections': 0, 'custom_cases': 0, 'armory_chicken_cosmetics': 0, 'custom_collection_tradeups': 1, 'glove_panel_variants': 1, 'black_market_price': 55,
     'viewmodel_range_percent': 250, 'viewmodel_fov_min': 40, 'viewmodel_fov_max': 90,
-    'armory_sticker_slots': 2,
+    'armory_sticker_slots': 1,
     'armory_case_slots': 2,
-    'armory_capsule_slots': 2,
+    'armory_capsule_slots': 1,
     'armory_limited_slots': 1,
     'armory_agent_slots': 1,
     'armory_agent_price': 25,
@@ -16,9 +16,10 @@ DEFAULTS = {
     'care_packages_enabled': 1, 'care_packages_from_matches': 0,
     'bot_hide_tag': 1, 'hide_mainmenu_promo': 1, 'network_server': 1,
     'armory_souvenir_slots': 1, 'armory_souvenir_price': 5,
-    'armory_terminal_slots': 1, 'armory_terminal_price': 10, 'armory_case_price': 5,
+    'armory_terminal_slots': 1, 'armory_terminal_price': 5, 'armory_case_price': 5,
     'match_weekly_pool_only': 1,
     'item_sales_enabled': 1,
+    'sell_flat_stars': 1,
     'sell_consumer': 1,
     'sell_industrial': 2,
     'sell_mil_spec': 5,
@@ -105,7 +106,7 @@ def load(directory):
 
 # Star-economy balancing, an exact mirror of cs2_gc BalanceSales (cs2_gc/src/item_sales.cpp): same integer
 # arithmetic and the same floating-point operation order, so the native Sell price equals what the GC pays.
-COLLECTION_PRICE, CHARM_PRICE, STICKER_PRICE = 4, 3, 1  # catalogue tiles; never cheaper than these
+COLLECTION_PRICE, CHARM_PRICE, STICKER_PRICE, CAPSULE_PRICE = 5, 3, 2, 5
 CASE_WEIGHTS = (2000, 3000, 2200, 1800)
 CASE_WEIGHT_TOTAL = 9000.0
 CASE_TOP_THREE_WEIGHT_TOTAL = 7200.0

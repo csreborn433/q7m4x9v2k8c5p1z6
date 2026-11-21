@@ -77,7 +77,8 @@ def settings(source, config):
                 if len(outcomes)==1:
                     key=next(iter(outcomes));cap=max(0,int(good['points'])-1)
                     fixed_caps[key]=min(fixed_caps.get(key,cap),cap)
-    return {'enabled': bool(config['item_sales_enabled']), 'flat': flat, 'fixedCaps':fixed_caps,
+    return {'enabled': bool(config['item_sales_enabled']), 'flatStars': bool(config.get('sell_flat_stars', 0)),
+            'flat': flat, 'fixedCaps':fixed_caps,
             'rarity': [0] + [config['sell_' + key] for key in ('consumer', 'industrial', 'mil_spec', 'restricted', 'classified', 'covert')],
             'goldDefinitions': gold_definitions, 'gold': config['sell_knife_glove'], 'stickerPercent': config['sell_sticker_percent'],
             'sticker': [0, 0, 0] + [config[key] for key in ('sell_sticker_mil_spec', 'sell_sticker_restricted', 'sell_sticker_classified', 'sell_sticker_covert')],
@@ -93,6 +94,7 @@ PRICE = '''
         const numeric = Number(id);
         if (!cs2gcSell.enabled || numeric <= 1000000000000 || numeric >= 2000000000000) return 0;
         if (InventoryAPI.GetItemAttributeValue && Number(InventoryAPI.GetItemAttributeValue(id,'cannot trade'))) return 0;
+        if (cs2gcSell.flatStars) return 1;
         const definition = String(InventoryAPI.GetItemDefinitionIndex(id));
         if (Object.prototype.hasOwnProperty.call(cs2gcSell.flat, definition)) return cs2gcSell.flat[definition];
         const rarity = InventoryAPI.GetItemRarity(id);

@@ -5,33 +5,35 @@ settings bridge (native_newsettings.py), so it appears again only after the next
 """
 import re
 
-RELEASE = '1.0.0-beta.5'
-SEEN_ID = 'r' + re.sub(r'\W', '_', RELEASE)
-DISPLAY_VERSION = 'V1.0'
+RELEASE = '1.1.0-beta.1'
+SEEN_ID = 'r' + re.sub(r'\W', '_', RELEASE) + '_automatic_death_view'
+DISPLAY_VERSION = 'V1.1'
 TITLE = "WHAT'S NEW IN CS-REBORN"
 SUBTITLE = DISPLAY_VERSION
 
 # (header, [(bold lead, text)]) in display order.
 SECTIONS = [
     ("WHAT'S NEW", [
-        ('Vanilla Case', 'a free one-time case is waiting at the end of your inventory. It opens without a key into '
-                         'any knife in its vanilla finish, with a random chance of StatTrak\u2122.'),
-        ('CS:GO animations', 'NEW settings (the former Watch tab) has a toggle for the original CS:GO draw, inspect '
-                             'and reload animations on guns and knives. It is off by default, so CS2 animations stay. '
-                             'Restart CS2 after switching.'),
-        ('Howl price', 'the M4A4 | Howl in the Armory now costs 100 stars instead of 250.'),
-        ('Online play (experimental)', 'both maps now use the native lobby start for Steam parties. Direct joins '
-                                        'use Hamachi/ZeroTier, LAN or a forwarded public IP; COPY CONNECT shows '
-                                        'the address. Two-PC gameplay validation is still pending.'),
-        ('Shared skins and Premier ratings', 'equipped skins, knives, gloves, agents and Armory items now have '
-                                             'Steam peer sharing as well as direct-IP sharing. Premier profiles '
-                                             'use the same channels. Everyone needs this version and matching '
-                                             'custom-finish assets.'),
-        ('Parties (experimental)', 'the PARTIES button in the main menu lists CS-Reborn parties from everyone, '
-                                   'through Steam. Host one or press JOIN; when the host picks a map, the whole '
-                                   'party follows to the host\'s server. Two-PC validation is still pending.'),
-        ("What's new window", 'this window appears once after every update. Close it when you are done reading; '
-                              "the WHAT'S NEW button above the Armory opens it again every time you click it."),
-        ('NEW settings save', 'your choices on the NEW page are now kept between launches.'),
+        ('NEW: Anime Case', '50 stars, no key. Unlock Goku, Itachi, Naruto, Kakashi or Sakura as standalone agents '
+                            'for both teams, with their own hands and native 3D inspection. Sakura is red, '
+                            'Goku and Itachi pink, Naruto and Kakashi purple.'),
+        ('Armory refresh', 'the Anime Case stays in the centre of the 4/3/4 page. The new 30-star Karambit Case '
+                           'contains only Karambits, including official and custom finishes with random wear and '
+                           'a chance of StatTrak. Name Tags replace the agents offer for 1 star. '
+                           'Charms cost 3 stars, stickers 2, and ordinary cases and collections 5.'),
+        ('One-star sales', 'sellable local weapons, knives, gloves, agents, stickers, charms and containers all grant '
+                           'one Armory star. The value is identical in single-item and multi-item selling.'),
+        ('Max performance', 'the low-end option now disables environmental fog, microshadows and smoke shadows, '
+                            'reduces particle detail and distant props, caps texture streaming at the supported '
+                            '512-pixel minimum, and keeps fewer old ragdolls. Your FPS caps are preserved.'),
+        ('HUD-coloured smoke', 'a new toggle below old CS:GO animations makes your thrown smoke use your HUD colour '
+                               'on local CS-Reborn servers. Everyone sees the thrower\'s colour; team HUD means '
+                               'orange for T and blue for CT. Off by default.'),
+        ('Automatic first-person death view', 'no toggle: the head-attached camera is now always enabled for '
+                                             'default, official and anime agents. It holds for 3 seconds, then fades '
+                                             'to a living teammate, or stays at your head when nobody is alive.'),
+        ('Clearer main menu', 'a compact CS-REBORN badge and highlighted BETA 1.1 label now match the Armory column.'),
+        ('Progress preserved', 'updating the Armory, prices and settings does not reset stars, statistics or inventory; '
+                               'existing saved profile data continues to load normally.'),
     ]),
 ]

@@ -180,7 +180,9 @@ def prepare(proxy_directory, enabled=True, config=None):
     current_gameinfo = read_text(gameinfo)
     catalogue_enabled = bool(config and config['armory_rotation_enabled'])
     finishes_enabled = bool(config and config.get('knife_finishes', 1))
-    if not enabled and not catalogue_enabled and not finishes_enabled:
+    from native_agents import installed_manifest, prepare_schema as prepare_agents
+    agents_enabled = installed_manifest(proxy_directory) is not None
+    if not enabled and not catalogue_enabled and not finishes_enabled and not agents_enabled:
         if not manifest_path.exists(): return 'disabled'
         manifest = json.loads(read_text(manifest_path))
         if manifest.get('owner') != OWNER: raise ValueError('Native folder is not owned by this feature')
@@ -201,6 +203,8 @@ def prepare(proxy_directory, enabled=True, config=None):
             patched, details['knife_finishes'] = prepare_finishes(proxy_directory, config, patched)
         except (OSError, ValueError, KeyError, struct.error) as error:
             raise ValueError('Finish preparation failed; launch stopped to avoid mismatched schema/material/family files: ' + str(error)) from error
+    if agents_enabled:
+        patched, details['anime_agents'] = prepare_agents(proxy_directory, config or {}, patched)
     if catalogue_enabled:
         from armory_rotation_catalog import patch_catalogue
         patched, catalogue = patch_catalogue(patched, config)

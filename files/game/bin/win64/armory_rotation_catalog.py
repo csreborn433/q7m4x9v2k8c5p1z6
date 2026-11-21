@@ -8,7 +8,7 @@ are a deliberate curated selection, not a claim of live market popularity rankin
 from inventory_item import collect, parse, as_dict
 from native_tradeups import parse as parse_spans
 from price_sheet import find_case_items
-from gameplay_config import COLLECTION_PRICE, CHARM_PRICE, STICKER_PRICE
+from gameplay_config import COLLECTION_PRICE, CHARM_PRICE, STICKER_PRICE, CAPSULE_PRICE
 
 ARMORY_COLLECTIONS = ('set_graphic_design', 'set_overpass_2024', 'set_realism_camo',
                       'set_spy_tech', 'set_arabesque', 'set_train_2025')
@@ -50,6 +50,7 @@ def catalogue(source, config):
     sections = collect(parse(source))
     lists = sections.get('client_loot_lists', {})
     items = {as_dict(v).get('name'): as_dict(v) for v in sections.get('items', {}).values() if isinstance(v, list)}
+    anime_case = 'crate_cs2gc_anime' in items
     campaign = sections.get('seasonaloperations', {}).get('11')
     if not isinstance(campaign, list) or as_dict(campaign).get('redeemable_goods') != 'xpshop':
         raise ValueError('Expected the inspected native Armory campaign 11')
@@ -62,7 +63,7 @@ def catalogue(source, config):
         if name in goods: return
         values = dict(template or {})
         values.update(item_name=name, points=str(cost), local_rotation_slot=slot)
-        values['ui_order'] = {'collection': '2', 'charm': '1', 'sticker': '1', 'souvenir': '3', 'case': '3', 'capsule': '3', 'limited': '2', 'agent': '1', 'terminal': '3'}[slot]
+        values['ui_order'] = {'collection': '2', 'charm': '1', 'sticker': '1', 'souvenir': '3', 'case': '3', 'capsule': '3', 'limited': '2', 'agent': '2', 'tool': '2', 'terminal': '3'}[slot]
         values.pop('bidding_cycle', None)
         if slot == 'limited': values['limited_until'] = '2147483647'
         goods[name] = values
@@ -70,9 +71,11 @@ def catalogue(source, config):
     for key, value in campaign:
         if key != 'operational_point_redeemable' or not isinstance(value, list): continue
         data = as_dict(value); name = data['item_name']
-        if name == 'lootlist:removed_items' and not config['armory_howl_enabled']: continue
+        if name == 'crate_cs2gc_gauntlet' or data.get('local_rotation_slot') == 'agent':
+            continue
+        if name == 'lootlist:removed_items' and (not config['armory_howl_enabled'] or anime_case): continue
         if not all(isinstance(v, str) for v in data.values()): raise ValueError('Unknown nested Armory goods field')
-        if data.get('local_rotation_slot') in ('collection', 'charm', 'sticker', 'case', 'capsule', 'limited', 'agent', 'terminal', 'souvenir'):
+        if data.get('local_rotation_slot') in ('collection', 'charm', 'sticker', 'case', 'capsule', 'limited', 'agent', 'tool', 'terminal', 'souvenir'):
             slot = data['local_rotation_slot']
         elif name.startswith('lootlist:keychain_pack_'): slot = 'charm'
         elif name.startswith('lootlist:sticker_pack_'): slot = 'sticker'
@@ -86,9 +89,12 @@ def catalogue(source, config):
         cost = LIMITED_PRICES.get(name.removeprefix('lootlist:'), int(data['points'])) if slot == 'limited' else int(data['points'])
         # Sale values are balanced against these prices (gameplay_config.balance): every weapon case costs
         # armory_case_price, and native tiles are never cheaper than the catalogue's own tile prices.
-        if slot == 'case': cost = config.get('armory_case_price', 5)
-        floor = {'collection': COLLECTION_PRICE, 'charm': CHARM_PRICE, 'sticker': STICKER_PRICE, 'capsule': STICKER_PRICE}.get(slot)
-        if floor: cost = max(cost, floor)
+        if slot == 'case': cost = 30 if name == 'crate_cs2gc_karambit' else 5
+        if slot == 'terminal': cost = 5
+        price = {'collection': COLLECTION_PRICE, 'charm': CHARM_PRICE, 'sticker': STICKER_PRICE,
+                 'capsule': STICKER_PRICE if name.startswith('crate_sticker_pack_') else CAPSULE_PRICE}.get(slot)
+        if price: cost = price
+        if name == 'Name Tag': cost = 1
         if name == 'lootlist:removed_items': cost = max(100, config['armory_howl_star_price'])
         add(name, slot, cost, data)
     templates = {v['local_rotation_slot']: v for v in goods.values()}
@@ -97,10 +103,13 @@ def catalogue(source, config):
         # Never cheaper than selling the knife it gives (that would be a free star loop).
         wear_max = max(config.get('sell_wear_'+wear,default) for wear,default in
                        [('fn',125),('mw',110),('ft',100),('ww',80),('bs',60)]) if config.get('sell_wear_enabled',1) else 100
-        price = max(config.get('black_market_price', 100), config.get('sell_knife_glove', 72)*wear_max//100 + 1)
+        price = config.get('black_market_price', 55) if config.get('sell_flat_stars') else max(
+            config.get('black_market_price', 55), config.get('sell_knife_glove', 72)*wear_max//100 + 1)
         add('crate_cs2gc_black_market', 'limited', price, {'flags': '2'})
-        if config.get('glove_finishes', 1) and 'crate_cs2gc_gauntlet' in items:
-            add('crate_cs2gc_gauntlet', 'limited', price, {'flags': '2'})  # the glove-only twin, same price
+        if 'crate_cs2gc_karambit' in items:
+            add('crate_cs2gc_karambit', 'case', 30, {'flags': '2'})
+    if 'Name Tag' in items:
+        add('Name Tag', 'tool', 1)
 
     def loot(name, slot, price):
         if name in lists:
@@ -139,25 +148,19 @@ def catalogue(source, config):
     for name in sorted(cases):
         # Our grant-only test cases are never sold; the custom weapon cases are, like any case.
         if name.startswith('crate_cs2gc_') or name in ROTATION_EXCLUDED_CASES: continue
-        add(name, 'case', config.get('armory_case_price', 5), {'flags': '2'})
+        add(name, 'case', 5, {'flags': '2'})
     for name in sorted(souvenirs): add(name, 'souvenir', config['armory_souvenir_price'], {'flags': '2'})
     if config['terminals_enabled']:
-        for name in sorted(terminals): add(name, 'terminal', config['armory_terminal_price'])
+        for name in sorted(terminals): add(name, 'terminal', 5)
     wanted = set(COMMUNITY_CAPSULES)
     wanted.update('crate_sticker_pack_' + event + '_' + group for event in TOURNAMENTS for group in TOURNAMENT_GROUPS)
     for name in sorted(wanted & items.keys()): add(name, 'capsule', STICKER_PRICE)
     from music_store import catalogue as music_catalogue
     _, _, _, music_capsules = music_catalogue(source)
     for _, name, _ in music_capsules:
-        if name in items: add(name, 'capsule', STICKER_PRICE)
+        if name in items: add(name, 'capsule', CAPSULE_PRICE)
     for name in LIMITED_LISTS: loot(name, 'limited', LIMITED_PRICES[name])
-    if config.get('armory_agent_slots', 1):
-        # One tile per operation's agents, rotating in the agent slot, with the operation's agent emblem.
-        for name, (_, item_set) in agent_collections(lists, sections.get('item_sets', {})).items():
-            template = {'callout': '#CSGO_' + item_set if item_set else 'Agents'}
-            if item_set: template['ui_set_image'] = item_set
-            add('lootlist:' + name, 'agent', config.get('armory_agent_price', 25), template)
-    if config['armory_howl_enabled']:
+    if config['armory_howl_enabled'] and not anime_case:
         howl = lists.get('removed_items')
         if isinstance(howl, list) and [(k, v) for k, v in howl if k != 'public_list_contents'] == [('[cu_m4a1_howling]weapon_m4a1', '1')]:
             loot('removed_items', 'limited', max(100, config['armory_howl_star_price']))

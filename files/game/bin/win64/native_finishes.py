@@ -42,6 +42,8 @@ VANILLA_CASE_ID = '54000'
 VANILLA_ICON = Path(__file__).resolve().parent / 'cs2_gc_vanilla_case.png'
 VANILLA_RARE_ICON = Path(__file__).resolve().parent / 'cs2_gc_vanilla_rare_item.png'
 KEYLESS_CASE_PREFAB = 'weapon_case_selfopening_collection'
+KARAMBIT_CASE_NAME = 'crate_cs2gc_karambit'
+KARAMBIT_CASE_ID = '57006'
 
 # OfflineCS make_recolors.py themes: (hue, saturation, spread) keep each colour's brightness.
 THEMES = {
@@ -437,6 +439,21 @@ def vanilla_case(source_text, gold_pools_text):
                 base=CASE_BASE, items=names, def_index=VANILLA_CASE_ID, keyless=True,
                 extra_keys=[('image_unusual_item', 'econ/weapon_cases/' + VANILLA_CASE_NAME + '_rare_item')])
     return spec, sorted([int(key), 0] for key, name in knives.items() if name in names)
+
+
+def karambit_case(source_text, gold_pools_text, custom_items):
+    _, knives, _, official = schema_info(source_text, gold_pools_text)
+    name = 'weapon_knife_karambit'
+    if name not in knives.values():
+        raise ValueError('Installed schema has no Karambit definition')
+    items = {('[%s]%s' % (kit, knife)) if kit else knife
+             for knife, kit in official if knife == name}
+    items.update(entry for entry in custom_items if re.fullmatch(r'\[[^\]]+\]' + name, entry))
+    if not items:
+        raise ValueError('No verified Karambit finishes are available')
+    return dict(name=KARAMBIT_CASE_NAME, title='Karambit Case',
+                description='Karambits only. Official and custom finishes, random wear and a chance of StatTrak.',
+                base=CASE_BASE, items=sorted(items), def_index=KARAMBIT_CASE_ID, keyless=True)
 
 
 def plan(source_text, gold_pools_text, titles, finish_source, known_ids=None, report=None):
@@ -851,6 +868,12 @@ def _prepare(proxy_directory, config, items_game_text):
                 if art.is_file():
                     files['panorama/images/econ/weapon_cases/' + VANILLA_CASE_NAME + suffix + '_png.vtex_c'] = \
                         make_vtex(template, art.read_bytes(), max_size=512)
+    karambit = karambit_case(items_game_text, gold, case)
+    extra.append(karambit)
+    reels[KARAMBIT_CASE_NAME] = reel_sample(items_game_text, gold, entries, karambit['items'])
+    if template is not None and ICON.is_file():
+        files['panorama/images/econ/weapon_cases/' + KARAMBIT_CASE_NAME + '_png.vtex_c'] = \
+            make_vtex(template, ICON.read_bytes(), max_size=512)
     patched, details = patch_items_game(items_game_text, entries, case, extra_cases=extra, extra_sections=sections_extra)
     atomic_write(proxy / REEL_FILE, json.dumps(reels, sort_keys=True) + '\n')
     atomic_write(proxy / PREVIEW_FILE, json.dumps(previews, sort_keys=True) + '\n')

@@ -243,6 +243,9 @@ def check_for_updates(root, opener=None, install=True, game_closed_check=None):
     if (not isinstance(current_build, dict) or
             current_build.get('steam_build') != SUPPORTED_STEAM_BUILD):
         raise UpdateError('The installed release manifest targets a different CS2 build.')
+    if current.get('local_test') is True:
+        print('Local test build: public updates are disabled. Install a normal release launcher to resume them.', flush=True)
+        return False
 
     try:
         feed = _read_json(FEED_URL + '?cache=' + os.urandom(8).hex(), opener)

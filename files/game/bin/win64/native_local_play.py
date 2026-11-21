@@ -13,11 +13,8 @@ WORKSHOP_MAP = 'cobblewingman'
 WORKSHOP_MAP_GROUP = 'mg_cobblewingman'
 MAP_ARCHIVE = 'maps/cobblewingman.vpk'
 MAX_MAP_ARCHIVE = 512 * 1024 * 1024
-MAP_ASSET_DIR = Path(__file__).resolve().parent / 'map_assets'
-MAP_ASSET = MAP_ASSET_DIR / 'cobblewingman.vpk'
-MAP_ART_DIR = MAP_ASSET_DIR
-MAP_RESOURCES = MAP_ASSET_DIR / 'cobblestone_resources'
-MAP_ART_FILES = ('cobblestone_banner.png', 'cobblestone_emblem.png')
+MAP_ASSET = Path(__file__).resolve().parent / 'map_assets' / 'cobblewingman.vpk'
+MAP_RESOURCES = Path(__file__).resolve().parent / 'map_assets' / 'cobblestone_resources'
 MAP_RESOURCES_FOLDER = 'cs2_gc_cobblestone_assets'
 MAP_RESOURCES_COMMENT = 'cs2_gc Cobblestone compiled resources'
 MAP_RESOURCES_OWNER = 'cs2-gc-cobblestone-resources-v1'
@@ -576,33 +573,30 @@ def prepare(directory,config):
     mod = game / LOCAL_PLAY_FOLDER
     map_path = mod / MAP_ARCHIVE
     staged_map = None
-    map_assets_available = (
-        all((MAP_ART_DIR / name).is_file() for name in MAP_ART_FILES) and
-        all((MAP_RESOURCES / name).is_file() for name in MAP_RESOURCE_FILES))
-    if map_assets_available:
-        if map_path.is_file():
-            validate_map_archive(map_path)
-        elif MAP_ASSET.is_file():
-            validate_map_archive(MAP_ASSET)
-            staged_map = tempfile.TemporaryDirectory(prefix='cs2gc-cobble-map-', dir=game)
-            staged_path = Path(staged_map.name) / 'cobblewingman.vpk'
-            shutil.copyfile(MAP_ASSET, staged_path)
-            validate_map_archive(staged_path)
-        if map_path.is_file() or staged_map:
-            maps.append(WORKSHOP_MAP)
-            resources_result = install_cobblestone_resources(directory)
+    if map_path.is_file():
+        validate_map_archive(map_path)
+    elif MAP_ASSET.is_file():
+        validate_map_archive(MAP_ASSET)
+        staged_map = tempfile.TemporaryDirectory(prefix='cs2gc-cobble-map-', dir=game)
+        staged_path = Path(staged_map.name) / 'cobblewingman.vpk'
+        shutil.copyfile(MAP_ASSET, staged_path)
+        validate_map_archive(staged_path)
+    if map_path.is_file() or staged_map:
+        maps.append(WORKSHOP_MAP)
+        resources_result = install_cobblestone_resources(directory)
     gamemodes=vpk_file(game/'csgo/pak01_dir.vpk','gamemodes.txt').decode('utf-8-sig')
     patched_gamemodes=patch_gamemodes(gamemodes, include_cobblestone=WORKSHOP_MAP in maps)
     extra.append(('gamemodes.txt',patched_gamemodes.encode('utf-8')))
     if WORKSHOP_MAP in maps:
         from native_finishes import make_vtex
+        assets=Path(__file__).resolve().parent/'map_assets'
         template = vpk_file(game/'csgo/pak01_dir.vpk',
                             'panorama/images/econ/weapon_cases/crate_operation_ii_png.vtex_c')
         extra.extend([
             ('panorama/images/cs2_gc/cobblestone_banner_png.vtex_c',
-             make_vtex(template, (MAP_ART_DIR/'cobblestone_banner.png').read_bytes())),
+             make_vtex(template, (assets/'cobblestone_banner.png').read_bytes())),
             ('panorama/images/cs2_gc/cobblestone_emblem_png.vtex_c',
-             make_vtex(template, (MAP_ART_DIR/'cobblestone_emblem.png').read_bytes(), max_size=256)),
+             make_vtex(template, (assets/'cobblestone_emblem.png').read_bytes(), max_size=256)),
         ])
     try:
         migrate_local_play_mount(game)
@@ -617,8 +611,6 @@ def prepare(directory,config):
     finally:
         if staged_map:
             staged_map.cleanup()
-    if WORKSHOP_MAP in maps:
+    if map_path.is_file():
         return result+'; bundled Cobblestone map installed in the native map path; '+resources_result
-    if not map_assets_available:
-        return result+'; Cobblestone map assets unavailable, Overpass only'
     return result+'; bundled Cobblestone map package is missing, Overpass only'

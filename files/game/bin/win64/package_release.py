@@ -22,7 +22,11 @@ EXCLUDED_NAMES = {'items_game.txt','steam_api64_real.dll','steam_api64.dll',
 ADMIN_TOOLS = {'settings_editor.py', 'grant_custom_cases.py', 'grant_test_items.py',
                'reset_profile.py', 'cs2_gc_reset_profile.cmd', 'repair_inventory.cmd',
                'publish_update_feed.py'}
-EXCLUDED_TOOL_ASSET_DIRS = {'map_assets', 'cs2_gc_intro_assets'}
+COBBLESTONE_VPKS = {
+    'map_assets/cobblewingman.vpk',
+    'map_assets/cobblestone_resources/pak01_dir.vpk',
+    'map_assets/cobblestone_resources/pak01_000.vpk',
+}
 
 
 def project_files(root):
@@ -32,15 +36,20 @@ def project_files(root):
         relative = path.relative_to(tools)
         if not path.is_file() or '__pycache__' in relative.parts:
             continue
-        if relative.parts[0] in EXCLUDED_TOOL_ASSET_DIRS:
-            continue
         if path.suffix.lower() not in ('.py','.png','.jpg','.cmd','.webm','.vpk'):
+            continue
+        if path.suffix.lower() == '.vpk' and relative.as_posix().casefold() not in COBBLESTONE_VPKS:
             continue
         if path.name in ADMIN_TOOLS or path.name.startswith('grant_'):
             continue
         if path.name in EXCLUDED_NAMES or 'cs2_gc_replay' in relative.parts:
             raise ValueError('Player or game data must never enter the release ZIP')
         result.append((path,BIN+relative.as_posix()))
+    from native_agents import BUNDLE, MANIFEST, read_manifest
+    bundle = tools / BUNDLE
+    if read_manifest(bundle) is not None:
+        result += [(bundle / name, BIN + BUNDLE + '/' + name)
+                   for name in (MANIFEST, 'pak01_dir.vpk', 'pak01_000.vpk')]
     return result
 
 
@@ -93,7 +102,7 @@ def source_commit(root):
     return commit
 
 
-def build_archive(root, runtime_data, bot_files):
+def build_archive(root, runtime_data, bot_files, *, local_test=False):
     root = Path(root)
     build = root/'build/Release'
     proxy = build/'steam_api64.dll'
@@ -154,6 +163,9 @@ def build_archive(root, runtime_data, bot_files):
         manifest['package_id'] = hashlib.sha256(
             json.dumps(manifest['files'],sort_keys=True,separators=(',',':')).encode()
         ).hexdigest()
+        if local_test:
+            manifest['local_test'] = True
+            manifest['package_id'] = hashlib.sha256((manifest['package_id'] + ':local-test').encode()).hexdigest()
         archive.writestr(BIN+'cs2_gc_release.json',json.dumps(manifest,indent=2))
     return buffer.getvalue()
 
@@ -344,12 +356,16 @@ def publish_update_feed_to_github(package_path):
 def main():
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--local-test', action='store_true',
+                        help='keep this local test package from being replaced by the public update feed')
     parser.add_argument('--publish-update-feed', action='store_true',
                         help='publish the generated mod files to the public GitHub update source')
     args = parser.parse_args()
+    if args.local_test and args.publish_update_feed:
+        parser.error('Local test packages cannot be published to the public update feed.')
     print('Fetching the bundled Python runtime from '+PYTHON_URL)
     runtime = fetch_bytes(PYTHON_URL, limit=32*1024*1024)
-    data = build_archive(root,runtime,bot_payload(root))
+    data = build_archive(root,runtime,bot_payload(root),local_test=args.local_test)
     smoke_test(data)
     with tempfile.TemporaryDirectory(prefix='csreborn-embedded-', dir=root/'build') as temporary:
         package = Path(temporary)/'CS2GC-Portable-25966348.zip'

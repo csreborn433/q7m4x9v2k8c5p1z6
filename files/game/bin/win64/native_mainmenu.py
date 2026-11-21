@@ -20,14 +20,21 @@ MAINMENU_BETA = """
                 armoryBranch = armoryBranch.GetParent();
             let indicator = column.FindChildTraverse('cs2gc-beta-indicator');
             if (!indicator) {
-                indicator = $.CreatePanel('Label', column, 'cs2gc-beta-indicator', {text:'CS-REBORN BETA 1.0'});
-                indicator.style.width = '100%';
-                indicator.style.height = '30px';
-                indicator.style.marginBottom = '8px';
-                indicator.style.fontSize = '20px';
-                indicator.style.color = '#f1c96b';
-                indicator.style.textAlign = 'left';
-                indicator.AddClass('stratum-regular-condensed');
+                indicator = $.CreatePanel('Panel', column, 'cs2gc-beta-indicator');
+                Object.assign(indicator.style, {width:'256px', height:'36px', marginBottom:'8px',
+                    padding:'0px 12px', flowChildren:'right', backgroundColor:'#15181de6',
+                    borderRadius:'4px', border:'1px solid #ffffff1a', borderLeft:'3px solid #ff8a1f'});
+                const brand = $.CreatePanel('Label', indicator, '', {text:'CS-REBORN'});
+                brand.AddClass('stratum-bold-condensed');
+                Object.assign(brand.style, {width:'fill-parent-flow(1)', fontSize:'20px',
+                    color:'#ffffff', verticalAlign:'center', letterSpacing:'1px'});
+                const version = $.CreatePanel('Label', indicator, '', {text:'BETA 1.1'});
+                version.AddClass('stratum-bold-condensed');
+                Object.assign(version.style, {fontSize:'16px', color:'#ffb66d',
+                    verticalAlign:'center', padding:'2px 6px', borderRadius:'3px',
+                    backgroundColor:'#ff8a1f18'});
+                indicator.hittest = false;
+                indicator.hittestchildren = false;
             }
             column.MoveChildBefore(indicator, armoryBranch);
         }
@@ -252,6 +259,22 @@ WHATS_NEW = """
             const body = $.CreatePanel('Panel', card, 'cs2gc-whatsnew-body');
             Object.assign(body.style, {width: '100%', height: 'fill-parent-flow(1.0)', flowChildren: 'down',
                 overflow: 'squish scroll', padding: '10px 32px 18px 32px'});
+            const agents = $.CreatePanel('Panel', body, 'cs2gc-whatsnew-agents');
+            Object.assign(agents.style, {width:'100%', flowChildren:'right', marginTop:'14px'});
+            data.agents.forEach(agent => {
+                const tile = $.CreatePanel('Panel', agents, '');
+                Object.assign(tile.style, {width:'fill-parent-flow(1)', flowChildren:'down',
+                    margin:'0px 4px', backgroundColor:'#ffffff08', borderRadius:'3px'});
+                const portrait = $.CreatePanel('Image', tile, '', {scaling:'stretch-to-fit-preserve-aspect'});
+                portrait.SetImage('file://{images}/econ/characters/' + agent.icon + '.png');
+                Object.assign(portrait.style, {width:'100%', height:'100px'});
+                const name = _LocalWhatsNewLabel(tile, agent.name, 'stratum-bold-condensed', 18, '#ffffff');
+                Object.assign(name.style, {textAlign:'center', marginBottom:'8px'});
+                const rarity = $.CreatePanel('Panel', tile, '');
+                Object.assign(rarity.style, {width:'100%', height:'3px', backgroundColor:agent.color});
+                tile.hittest = false;
+                tile.hittestchildren = false;
+            });
             data.sections.forEach(section => {
                 const heading = _LocalWhatsNewLabel(body, section[0], 'stratum-bold-condensed', 22, '#ff9a3c');
                 heading.style.marginTop = '16px';
@@ -652,8 +675,12 @@ PARTIES = """
 
 def whats_new_script():
     from whats_new import DISPLAY_VERSION, SEEN_ID, SECTIONS, SUBTITLE, TITLE
+    from native_agents import AGENTS, DISPLAY_NAMES, PREFIX
+    colors = {'mythical': '#8847ff', 'legendary': '#d32ce6', 'ancient': '#eb4b4b'}
     data = {'title': TITLE, 'subtitle': SUBTITLE, 'sections': [[header, [list(entry) for entry in entries]]
-                                                                for header, entries in SECTIONS]}
+                                                                for header, entries in SECTIONS],
+            'agents': [dict(name=DISPLAY_NAMES[title], icon=PREFIX + title.lower(), color=colors[rarity])
+                       for title, _, rarity in AGENTS]}
     return (WHATS_NEW.replace('__SEEN__', json.dumps(SEEN_ID)).replace('__DATA__', json.dumps(data))
             .replace('__RELEASE__', json.dumps(DISPLAY_VERSION)))
 
@@ -670,11 +697,36 @@ def whats_new_icon(game):
     icon = Path(__file__).resolve().parent / 'cs2_gc_mod_icon.png'
     return make_vtex(template, icon.read_bytes(), max_size=256)
 
+HUD_SMOKE_SYNC = """
+        const smokeContext = $.GetContextPanel();
+        if (!smokeContext.__cs2gcSmokeSync) {
+            smokeContext.__cs2gcSmokeSync = true;
+            let previousSmoke = '';
+            function syncHudSmoke() {
+                if (!smokeContext.IsValid()) return;
+                const on = GameInterfaceAPI.GetSettingString('ui_cs2gc_smoke') === '1' ? '1' : '0';
+                const hue = String(GameInterfaceAPI.GetSettingString('cl_hud_color'));
+                if (/^(?:[0-9]|1[0-2])$/.test(hue)) {
+                    const value = on + ':' + hue;
+                    if (value !== previousSmoke) {
+                        // Quoted: the console tokenizer splits on ':', and setinfo rejects extra arguments.
+                        GameInterfaceAPI.ConsoleCommand('setinfo cs2gc_smoke "' + value + '"');
+                        previousSmoke = value;
+                    }
+                } else {
+                    $.Msg('[CS2GC] HUD smoke: invalid cl_hud_color: ' + hue);
+                }
+                $.Schedule(0.25, syncHudSmoke);
+            }
+            $.Schedule(0.25, syncHudSmoke);
+        }
+"""
+
 WATCH_SETTINGS = """
     // cs2_gc: CS2-style slide toggle, styled inline after slider_toggle.css (the Watch page does not load it).
     const _cs2gcAnimBoot = GameInterfaceAPI.GetSettingString('ui_cs2gc_animations') === 'csgo';
     const _cs2gcGraphicsBoot = GameInterfaceAPI.GetSettingString('ui_low_end_pc') === '1';
-    function _LocalRestartToggle(parent, id, titleText, description, setting, bootValue, initialValue) {
+    function _LocalSettingsToggle(parent, id, titleText, description, setting, bootValue, initialValue, liveStatus = null) {
         const row = $.CreatePanel('Button', parent, id);
         Object.assign(row.style, {flowChildren:'right', width:'100%', margin:'0px',
             padding:'16px 20px', backgroundColor:'rgba(0,0,0,0.35)', borderRadius:'4px'});
@@ -698,9 +750,9 @@ WATCH_SETTINGS = """
                                             : 'rgba(0,0,0,0.45)';
             pill.style.border = on ? '2px solid #147717' : '2px solid rgba(255,255,255,0.18)';
             knob.style.transform = on ? 'translateX(22px)' : 'translateX(0px)';
-            status.text = on === bootValue ? (on ? 'Low-end graphics active' : 'Default graphics active')
-                                           : 'Restart CS2 to apply';
-            status.style.color = on === bootValue ? '#7ec27f' : '#e8c15a';
+            status.text = liveStatus ? liveStatus[on ? 0 : 1] :
+                on === bootValue ? (on ? 'Low-end graphics active' : 'Default graphics active') : 'Restart CS2 to apply';
+            status.style.color = liveStatus || on === bootValue ? '#7ec27f' : '#e8c15a';
         };
         let on = initialValue;
         show(on);
@@ -794,8 +846,13 @@ WATCH_SETTINGS = """
             graphicsHeading.AddClass('stratum-regular-condensed');
             Object.assign(graphicsHeading.style, {fontSize:'24px', color:'white', marginBottom:'12px'});
             _LocalAnimationToggle(gameplay);
-            _LocalRestartToggle(graphics, 'CS2GCLowEndGraphicsToggle', 'ENABLE LOW END PC GRAPHICS',
-                'Reduces shadows, particles, decals, fog, sky and texture detail. Restart CS2 to apply.',
+            _LocalSettingsToggle(gameplay, 'CS2GCHudSmokeToggle', 'USE HUD COLOUR FOR SMOKE',
+                'Everyone sees your thrown smoke in your HUD colour. Team colour: orange T, blue CT. Local CS-Reborn servers.',
+                'ui_cs2gc_smoke', false, GameInterfaceAPI.GetSettingString('ui_cs2gc_smoke') === '1',
+                ['New smokes use your HUD colour', 'Normal smoke colour'])
+                .style.marginTop = '12px';
+            _LocalSettingsToggle(graphics, 'CS2GCLowEndGraphicsToggle', 'ENABLE LOW END PC GRAPHICS',
+                'Reduces particles, fog, microshadows, smoke shadows, distant props, textures and old ragdolls. Restart CS2 to apply.',
                 'ui_low_end_pc', _cs2gcGraphicsBoot, _cs2gcGraphicsBoot);
             panel.__cs2gcSettingsPlaceholder = true;
         }
@@ -857,7 +914,7 @@ def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
         raise ValueError('Installed main menu layout changed; no patch written')
     source=source.replace(ANCHOR, '    let m_localMenuTimer = null;\n    let m_localMenuVisible = false;\n' +
                           '    let m_localWhatsNewShown = false;\n    let m_localPartyUi = null;\n    let m_localPartyAccess = \'\';\n' +
-                          ANCHOR + STATS_NAV + MAINMENU_BETA + DEFAULT_CT_PISTOL + HIDE_MAINMENU_FRIENDS +
+                          ANCHOR + STATS_NAV + MAINMENU_BETA + DEFAULT_CT_PISTOL + HIDE_MAINMENU_FRIENDS + HUD_SMOKE_SYNC +
                           HIDE_NEW_POPULAR + HIDE_CLIENT_UPDATE_BUTTON +
                           (ARMORY_ONLY if hide_promo else "") +
                           MENU_REFRESH.replace('__ARMORY__', '_LocalKeepOnlyArmory();' if hide_promo else '') +

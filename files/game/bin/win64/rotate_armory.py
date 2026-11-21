@@ -46,43 +46,24 @@ INSERT = '''    // Local GC Armory rotation: generated settings must match cs2_g
     }
     function _LocalCataloguePage(entries, active, cycle) {
         const offers = entries.filter(e => active.indexOf(e.item_name) !== -1);
-        // Keep the fixed limited offer in the big tile without tying it to alphabetic order.
-        const limited = offers.filter(e => m_localRotation.categories[e.item_name] === 'limited');
-        const featured = limited.length ? [limited[(cycle || 0) % limited.length]] : [];
-        const groups = {};
-        offers.filter(e => featured.indexOf(e) === -1).forEach(e => {
-            const row = e.ui_order || '3'; (groups[row] || (groups[row] = [])).push(e);
-        });
-        Object.keys(groups).forEach(row => {
-            const types = {};
-            groups[row].forEach(entry => {
-                const kind = m_localRotation.categories[entry.item_name] || 'other';
-                (types[kind] || (types[kind] = [])).push(entry);
-            });
-            const order = row === '1' ? ['charm','sticker','agent'] : row === '3' ? ['souvenir','case','terminal','capsule'] : ['collection','limited'];
-            const kinds = Object.keys(types).sort((a,b) => order.indexOf(a)-order.indexOf(b)), ordered = [];
-            // Fixed native slots: two charms + sticker + agent above; souvenir + case + terminal + capsule below.
-            const limits = row === '1' ? {charm:2,sticker:1,agent:1} : row === '3' ? {souvenir:1,case:1,terminal:1,capsule:1} : {};
-            kinds.forEach(kind => {
-                if (limits[kind] === undefined || types[kind].length <= limits[kind]) return;
-                const pool = types[kind], start = ((cycle || 0) * limits[kind]) % pool.length;
-                types[kind] = Array.from({length:limits[kind]}, (_,i) => pool[(start+i)%pool.length]);
-            });
-            const length = Math.max(...kinds.map(kind => types[kind].length));
-            if (row === '1' || row === '3') kinds.forEach(kind => ordered.push(...types[kind]));
-            else for (let index = 0; index < length; ++index)
-                kinds.forEach(kind => {if (types[kind][index]) ordered.push(types[kind][index]);});
-            groups[row] = ordered;
-        });
-        // A single stock-style page: 4 small / 3 large / 4 small. The limited item takes one of the 3 large slots.
-        const capacity = {'1':4,'2':3,'3':4};
-        const view = featured.map(e => e.item_name);
-        Object.keys(groups).forEach(row => {
-            const room = Math.max(0, (capacity[row] || 4) - featured.filter(e => (e.ui_order || '2') === row).length);
-            groups[row].slice(0, room).forEach(e => view.push(e.item_name));
-        });
-        m_localFeatured = featured.length ? featured[0].item_name : null;
-        return view;
+        const kind = name => offers.filter(e => m_localRotation.categories[e.item_name] === name);
+        const name = entry => entry && entry.item_name;
+        const take = (pool, count, skip=[]) => pool.filter(e => skip.indexOf(e.item_name) === -1).slice(0, count);
+        const collections = kind('collection');
+        const featuredCollection = collections.find(e => e.item_name === 'lootlist:set_realism_camo') || collections[collections.length - 1];
+        const collectionSmall = take(collections, 2, featuredCollection ? [featuredCollection.item_name] : []);
+        const cases = kind('case');
+        const karambit = cases.find(e => e.item_name === 'crate_cs2gc_karambit');
+        const otherCases = take(cases, 2, [name(karambit)].filter(Boolean));
+        const selectedCases = [otherCases[0], karambit || otherCases[1]].filter(Boolean);
+        const top = [kind('charm')[0], collectionSmall[0], kind('sticker')[0], collectionSmall[1]].filter(Boolean);
+        const featured = kind('limited').find(e => e.item_name === 'crate_cs2gc_anime') || kind('limited')[0];
+        const middle = [featuredCollection, featured, kind('tool')[0]].filter(Boolean);
+        const bottom = [kind('capsule')[0], selectedCases[0], kind('terminal')[0], selectedCases[1]].filter(Boolean);
+        m_localFeatured = name(middle[1]);
+        const page = top.concat(middle, bottom);
+        [top, middle, bottom].forEach((row, index) => row.forEach(entry => entry.ui_order = String(index + 1)));
+        return page.map(name);
     }
     function _LocalRotationKey(slot, cycle, name) {
         let hash = 2166136261;
@@ -203,7 +184,7 @@ INSERT = '''    // Local GC Armory rotation: generated settings must match cs2_g
             // use the same local rotation offset: pseudo event 4300000000000000 + offset.
             if (offset >= 0 && offset <= 1000000) TournamentsAPI.SetTournamentFavorite(4300000000000000 + offset, true);
         }
-        const cycle = 0;
+        const cycle = 1;
         if (!force && m_localRotationCycle === cycle) return;
         const pools = {};
         entries.forEach(entry => {
@@ -214,7 +195,14 @@ INSERT = '''    // Local GC Armory rotation: generated settings must match cs2_g
         if (Object.keys(pools).length) {
             Object.keys(pools).sort().forEach(slot => {
                 const count = Math.min(m_localRotation.counts[slot] === undefined ? 1 : m_localRotation.counts[slot], pools[slot].length);
-                const pool = _LocalShuffleRotation(pools[slot], slot, cycle, count);
+                const preferred = {
+                    collection: ['lootlist:set_realism_camo'],
+                    case: ['crate_cs2gc_karambit'],
+                    limited: ['crate_cs2gc_anime', 'crate_cs2gc_black_market']
+                }[slot] || [];
+                const shuffled = _LocalShuffleRotation(pools[slot], slot, cycle, count);
+                const fixed = preferred.map(item => shuffled.find(entry => entry.item_name === item)).filter(Boolean);
+                const pool = fixed.concat(shuffled.filter(entry => fixed.indexOf(entry) === -1));
                 for (let i = 0; i < count; ++i) active.push(pool[i].item_name);
             });
         } else {
@@ -274,8 +262,8 @@ INSERT = '''    // Local GC Armory rotation: generated settings must match cs2_g
             }
             if (nav) nav.visible = show;
         });
-        // Catalogue generation order is independent of visual order. Move visible tiles within each small row.
-        ['1','3'].forEach(rowId => {
+        // Catalogue generation order is independent of visual order. Move visible tiles within each row.
+        ['1','2','3'].forEach(rowId => {
             const row = m_elContentPanel.FindChildInLayoutFile('id-xpshop-row-' + rowId);
             if (!row) return;
             let previous = null;
@@ -312,10 +300,18 @@ PREPARE = '''        // Resolve each tile from its own native row, without inher
                 entry.ui_order = '2'; entry.tile_width = m_tileWidth; entry.tile_height = m_tileHeight;
                 entry.on_item_activate = _OpenFullScreenInspectItem;
             }
+            if (slot === 'collection')
+                entry.ui_order = entry.item_name === 'lootlist:set_realism_camo' ? '2' : '1';
+            else if (slot === 'agent' || slot === 'tool') entry.ui_order = '2';
             entry.local_terminal = slot === 'terminal';
+            if (slot === 'tool') {
+                entry.lootlist = [InventoryAPI.GetFauxItemIDFromDefAndPaintIndex(
+                    InventoryAPI.GetItemDefinitionIndexFromDefinitionName(entry.item_name), 0)];
+                delete entry.suffix_loc_string;
+            }
             if(entry.item_name==='lootlist:cs2gc_chicken_cosmetics')entry.lootlist_item_type='sticker';
             entry.local_souvenir = slot === 'souvenir';
-            entry.local_direct_case = entry.item_name === 'crate_cs2gc_black_market' || entry.item_name === 'crate_cs2gc_gauntlet';
+            entry.local_direct_case = entry.item_name === 'crate_cs2gc_black_market' || entry.item_name === 'crate_cs2gc_gauntlet' || entry.item_name === 'crate_cs2gc_anime' || entry.item_name === 'crate_cs2gc_karambit';
             if (slot === 'agent') {
                 // An operation's agent collection shows its own agents; older rows show every agent.
                 const own = String(entry.item_name).startsWith('lootlist:lootlist_cs2gc_agents_') ?
@@ -405,9 +401,19 @@ def patch_previews(source):
     # the existing native InspectModelImage path for fixed/limited goods.
     grid = "                let elModel = elShopTile.FindChild('id-grid-item-model');"
     # An optional preview change must not disable rotation/catalogue controls.
-    source = source.replace(grid, "                if (ShopEntry.local_agent) return;\n" + grid, 1)
+    artwork = "['crate_cs2gc_anime', 'crate_cs2gc_karambit', 'Name Tag'].indexOf(ShopEntry.item_name) !== -1"
+    source = source.replace(grid, "                if (ShopEntry.local_agent || " + artwork + ") return;\n" + grid, 1)
     create = "    function CreateShopTile(elTilesContainer, itemId, ShopEntry) {"
     agent = '''
+        if (['crate_cs2gc_anime', 'crate_cs2gc_karambit', 'Name Tag'].indexOf(ShopEntry.item_name) !== -1) {
+            const panel = $.CreatePanel('Panel', elTilesContainer, itemId, {class:'xpshop__inspect-grid__tile'});
+            panel.SetHasClass('single-item', true);
+            const image = $.CreatePanel('ItemImage', panel, '', {itemid:itemId});
+            image.style.width = '65%'; image.style.height = '65%';
+            image.style.horizontalAlign = 'center'; image.style.verticalAlign = 'center';
+            image.hittest = false;
+            return panel;
+        }
         if (ShopEntry.local_agent) {
             const panel = $.CreatePanel('Panel', elTilesContainer, itemId);
             panel.Data().localAgentPreview = true;
@@ -478,7 +484,7 @@ def patch(source, config, categories=None, agents=None, previews=None):
                 'categories': categories or {}, 'agents': agents or [], 'previews': previews or {},
                 'collectionNames': collection_names,
                 'counts': {slot: config.get('armory_' + slot + '_slots', 1) for slot in
-                           ('collection', 'case', 'capsule', 'charm', 'sticker', 'limited', 'agent', 'terminal', 'souvenir')}}
+                           ('collection', 'case', 'capsule', 'charm', 'sticker', 'limited', 'agent', 'tool', 'terminal', 'souvenir')}}
     source = source.replace('    function _UpdateShopGoods(m_nTrack) {',
                             INSERT.replace('__SETTINGS__', json.dumps(settings)) + '    function _UpdateShopGoods(m_nTrack) {', 1)
     filtered_anchor = "        aShopItemsData.filter(element => !m_localRotation.enabled || m_localRotationVisible.indexOf(element.item_name) !== -1).forEach((element) => {\n"
