@@ -38,8 +38,7 @@ SECTIONS = [
         ('Automatic first-person death view', 'the head-attached camera is always enabled for default, official and '
                                              'anime agents. It holds for 3 seconds, then fades to a living teammate, '
                                              'or stays at your head when nobody is alive.'),
-        ('New intro and links', 'a new CS-REBORN intro plays when the game starts. Click the CS-REBORN BETA 1.0 badge '
-                                'under the Armory for the official website, or DEVELOPER above PARTIES for the '
-                                "developer's Steam profile."),
+        ('New links', 'click the CS-REBORN BETA 1.0 badge under the Armory for the official website, or '
+                      "DEVELOPER above PARTIES for the developer's Steam profile."),
     ]),
 ]
