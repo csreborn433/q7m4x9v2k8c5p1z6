@@ -23,6 +23,7 @@ SOCIAL_MENU = r"""
         }
         function _LocalShowPlayers() {
             if (_LocalInMatch() || _cs2gcPartyMenu.FindChildTraverse('cs2gc-players')) return;
+            _LocalHideRecentPulls(_cs2gcPartyMenu);
             const screen = $.CreatePanel('Panel', _cs2gcPartyMenu, 'cs2gc-players');
             Object.assign(screen.style, {width:'100%', height:'100%', backgroundColor:'#000000b0', zIndex:'1000'});
             screen.hittest = true;
@@ -90,7 +91,13 @@ SOCIAL_MENU = r"""
         }
         function _LocalRecentPulls(home) {
             let box = _cs2gcPartyMenu.FindChildTraverse('cs2gc-home-pulls');
-            if (!home.checked) { if (box) box.visible = false; return; }
+            const column = _cs2gcPartyMenu.FindChildTraverse('JsRightColumn');
+            if (!home || !home.checked || _m_activeTab || !column || column.BHasClass('hidden') ||
+                _cs2gcPartyMenu.BHasClass('MainMenuRootPanel--PauseMenuMode') ||
+                _cs2gcPartyMenu.FindChildTraverse('cs2gc-whatsnew') || _cs2gcPartyMenu.FindChildTraverse('cs2gc-players')) {
+                if (box) box.visible = false;
+                return;
+            }
             if (!box) {
                 box = $.CreatePanel('Panel', _cs2gcPartyMenu, 'cs2gc-home-pulls');
                 Object.assign(box.style,{width:'24%',maxWidth:'340px',flowChildren:'down',padding:'12px',
@@ -145,7 +152,7 @@ SOCIAL_MENU = r"""
         }
         function _LocalSocialTick() {
             const home = _cs2gcPartyMenu.FindChildInLayoutFile('MainMenuNavBarHome');
-            if (home) _LocalRecentPulls(home);
+            _LocalRecentPulls(home);
             if (partyNav && partyNav.checked && _LocalPartySession() && !LobbyAPI.BIsHost())
                 GameInterfaceAPI.ConsoleCommand('exec cs2gc_follow');
         }

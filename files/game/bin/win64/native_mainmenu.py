@@ -194,7 +194,7 @@ MENU_REFRESH = """
         }
         function _LocalRefreshVisibleMenu() {
             m_localMenuTimer = null;
-            if (!m_localMenuVisible || _LocalInMatch()) return;
+            if (!m_localMenuVisible || _LocalInMatch()) { _LocalHideRecentPulls($.GetContextPanel()); return; }
             _LocalHideMainMenuFriendsSidebar();
             _LocalHideNewPopular($.GetContextPanel());
             _LocalHideClientUpdate($.GetContextPanel());
@@ -246,6 +246,7 @@ WHATS_NEW = """
             }
             if (!reopen && (m_localWhatsNewShown ||
                 GameInterfaceAPI.GetSettingString('ui_cs2gc_whatsnew') === __SEEN__)) return;
+            _LocalHideRecentPulls(context);
             m_localWhatsNewShown = true;
             const data = __DATA__;
             const overlay = $.CreatePanel('Panel', context, 'cs2gc-whatsnew');
@@ -550,7 +551,7 @@ PARTIES = """
                 join.style.backgroundColor = 'gradient(linear, 0% 0%, 100% 0%, from(#ff8a1f), to(#e8326e))';
                 join.style.marginRight = '0px';
             });
-            if (!info.parties.some(party => !party.own)) {
+            if (!info.parties.length) {
                 const empty = info.search === 'done' ? 'No open parties right now. Host one, or refresh in a moment.' :
                     info.search === 'failed' ? 'Could not load parties.' : 'Searching for parties...';
                 _LocalWhatsNewLabel(ui.list, empty, 'stratum-regular', 17, '#7d8692').style.marginTop = '8px';
@@ -1090,14 +1091,22 @@ def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
     mission = "$('#id-pausemenu-mission-panel').SetHasClass('hide-non-prime', MyPersonaAPI.GetElevatedState() != 'elevated');"
     mission_replacement = """const missionPanel = $('#id-pausemenu-mission-panel');
         if (missionPanel) { missionPanel.visible = false; missionPanel.style.visibility = 'collapse'; }"""
+    floating_hide = '    function _HideFloatingPanels() {'
     if (source.count(ANCHOR) != 1 or source.count(HIDE_ANCHOR) != 1 or
+            source.count(floating_hide) != 1 or
             source.count(store) != 1 or source.count(mission) != 1 or
             'cs2_gc: cosmetic only' in source or 'const statsNav =' in source or
             '_LocalHideNewPopular' in source or '_LocalHideMainMenuFriendsSidebar' in source or
             '__cs2gcDefaultCtPistolAttempted' in source or
             'cs2gc-mainmenu-brand-banner' in source):
         raise ValueError('Installed main menu layout changed; no patch written')
-    source=source.replace(ANCHOR, '    let m_localMenuTimer = null;\n    let m_localMenuVisible = false;\n' +
+    hide_pulls = '\n        _LocalHideRecentPulls($.GetContextPanel());\n'
+    source = source.replace(floating_hide, floating_hide + hide_pulls, 1)
+    source=source.replace(ANCHOR, '''    function _LocalHideRecentPulls(root) {
+        const box = root.FindChildTraverse('cs2gc-home-pulls');
+        if (box) box.visible = false;
+    }
+    let m_localMenuTimer = null;\n    let m_localMenuVisible = false;\n''' +
                           '    let m_localWhatsNewShown = false;\n    let m_localPartyUi = null;\n    let m_localPartyAccess = \'\';\n' +
                           ANCHOR + PARTIES_NAV + MAINMENU_BETA.replace('__WEBSITE_URL__', WEBSITE_URL) +
                           DEFAULT_CT_PISTOL + HIDE_MAINMENU_FRIENDS + HUD_SMOKE_SYNC +
@@ -1107,10 +1116,8 @@ def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
                           whats_new_script() + PARTIES + SOCIAL_MENU +
                           DEVELOPER.replace('__DEVELOPER_PROFILE_URL__', DEVELOPER_PROFILE_URL) + UPDATE_BANNER +
                           '\n        _LocalRefreshVisibleMenu();\n', 1)
-    source=source.replace(HIDE_ANCHOR, HIDE_ANCHOR + '''
+    source=source.replace(HIDE_ANCHOR, HIDE_ANCHOR + hide_pulls + '''
         m_localMenuVisible = false;
-        const root = $.GetContextPanel(), pulls = root.FindChildTraverse('cs2gc-home-pulls');
-        if (pulls) pulls.visible = false;
         if (typeof GameInterfaceAPI !== 'undefined' && GameInterfaceAPI.SetSettingString)
             ['cs2gc_follow','cs2gc_openings','cs2gc_pull_0','cs2gc_pull_1','cs2gc_pull_2','cs2gc_pull_3']
                 .forEach(key => GameInterfaceAPI.SetSettingString(key,''));
@@ -1120,7 +1127,7 @@ def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
         }
 ''', 1)
     source=source.replace(store, store_replacement, 1)
-    source=source.replace(mission, mission_replacement, 1)
+    source=source.replace(mission, '_LocalHideRecentPulls($.GetContextPanel());\n        ' + mission_replacement, 1)
     if care_packages:
         anchor = """        if (!$('#MainMenuNavBarHome').checked)
             return;
