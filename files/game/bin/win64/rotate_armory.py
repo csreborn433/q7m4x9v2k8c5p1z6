@@ -49,7 +49,8 @@ INSERT = '''    // Local GC Armory rotation: generated settings must match cs2_g
         const kind = name => offers.filter(e => m_localRotation.categories[e.item_name] === name);
         const name = entry => entry && entry.item_name;
         const find = (pool, item) => pool.find(e => e.item_name === item);
-        const collections = kind('collection');
+        const dreamsCase = find(kind('collection'), 'crate_community_30');
+        const collections = kind('collection').filter(e => e !== dreamsCase);
         const featuredCollection = find(collections, 'lootlist:set_realism_camo') || collections[collections.length - 1];
         const gunCollections = collections.filter(e => e !== featuredCollection).slice(0, 2);
         const cases = kind('case');
@@ -61,7 +62,7 @@ INSERT = '''    // Local GC Armory rotation: generated settings must match cs2_g
         const top = [kind('charm')[0], stickerCapsule, kind('sticker')[0], kind('tool')[0]].filter(Boolean);
         const featured = find(kind('limited'), 'crate_cs2gc_anime') || kind('limited')[0];
         const middle = [featuredCollection, featured, gloveCase || otherCases.shift()].filter(Boolean);
-        const bottom = [gunCollections[0], gunCollections[1], kind('terminal')[0], knifeCase || otherCases.shift()].filter(Boolean);
+        const bottom = [gunCollections[0], dreamsCase || gunCollections[1], kind('terminal')[0], knifeCase || otherCases.shift()].filter(Boolean);
         m_localFeatured = name(middle[1]);
         const page = top.concat(middle, bottom);
         [top, middle, bottom].forEach((row, index) => row.forEach(entry => entry.ui_order = String(index + 1)));
@@ -69,7 +70,7 @@ INSERT = '''    // Local GC Armory rotation: generated settings must match cs2_g
     }
     // Fixed picks of each pool, mirrored by cs2_gc Armory::RotationAt.
     const _LocalPreferred = {
-        collection: ['lootlist:set_realism_camo'],
+        collection: ['lootlist:set_realism_camo', 'lootlist:set_overpass_2024', 'crate_community_30'],
         charm: ['lootlist:keychain_pack_kc_missinglink_lootlist'],
         sticker: ['lootlist:sticker_pack_stkr_craft_01_lootlist'],
         case: ['crate_cs2gc_vanilla', 'crate_cs2gc_gauntlet'],
@@ -423,7 +424,7 @@ def patch_previews(source):
     # the existing native InspectModelImage path for fixed/limited goods.
     grid = "                let elModel = elShopTile.FindChild('id-grid-item-model');"
     # An optional preview change must not disable rotation/catalogue controls.
-    artwork = "['crate_cs2gc_anime', 'crate_cs2gc_karambit', 'crate_cs2gc_vanilla', 'Name Tag'].indexOf(ShopEntry.item_name) !== -1"
+    artwork = "['crate_cs2gc_karambit', 'crate_cs2gc_vanilla', 'Name Tag'].indexOf(ShopEntry.item_name) !== -1"
     source = source.replace(grid, "                if (ShopEntry.local_agent || " + artwork + ") return;\n" + grid, 1)
     create = "    function CreateShopTile(elTilesContainer, itemId, ShopEntry) {"
     agent = '''
@@ -485,8 +486,13 @@ def patch_previews(source):
     source = source.replace("$.Schedule(.25, () => elModel.TransitionToCamera('cam_case_open', 1));",
                             "$.Schedule(.25, () => { if (elModel && elModel.IsValid()) elModel.TransitionToCamera('cam_case_open', 1); });", 1)
     # The knife-only Black Market Case lists thousands of knives; draw a shuffled sample instead of freezing the page.
+    from native_agents import AGENTS
+    definitions = json.dumps([int(definition) for _, definition, _ in AGENTS])
     source = source.replace('let aCrateLootlist = _GetLootListForReward(itemId);',
-                            'let aCrateLootlist = _GetLootListForReward(itemId);\n                        if (aCrateLootlist.length > 96) aCrateLootlist = aCrateLootlist.sort(() => 0.5 - Math.random()).slice(0, 96);', 1)
+                            """let aCrateLootlist = ShopEntry.item_name === 'crate_cs2gc_anime'
+                            ? __AGENTS__.map(def => InventoryAPI.GetFauxItemIDFromDefAndPaintIndex(def, 0))
+                            : _GetLootListForReward(itemId);
+                        if (aCrateLootlist.length > 96) aCrateLootlist = aCrateLootlist.sort(() => 0.5 - Math.random()).slice(0, 96);""".replace('__AGENTS__', definitions), 1)
     # Category controls remain visible while inspecting; switching categories returns to tiles.
     return source
 

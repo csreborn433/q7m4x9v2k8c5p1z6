@@ -28,7 +28,7 @@ MAINMENU_BETA = """
                 brand.AddClass('stratum-bold-condensed');
                 Object.assign(brand.style, {width:'fill-parent-flow(1)', fontSize:'20px',
                     color:'#ffffff', verticalAlign:'center', letterSpacing:'1px'});
-                const version = $.CreatePanel('Label', indicator, '', {text:'BETA 1.2'});
+                const version = $.CreatePanel('Label', indicator, '', {text:'BETA 1.0'});
                 version.AddClass('stratum-bold-condensed');
                 Object.assign(version.style, {fontSize:'16px', color:'#ffb66d',
                     verticalAlign:'center', padding:'2px 6px', borderRadius:'3px',

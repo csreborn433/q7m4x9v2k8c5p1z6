@@ -33,6 +33,8 @@ FIXED_PRICES = {'lootlist:set_realism_camo': 10, 'Name Tag': 1}
 # Cases never offered in the Armory rotation. crate_community_4 is the Operation Breakout
 # Weapon Case; the user wants a different case in its slot (everything else unchanged).
 ROTATION_EXCLUDED_CASES = {'crate_community_4'}
+DREAMS_CASE = 'crate_community_30'
+RADIANT_OFFER = 'lootlist:set_timed_drops_warm'
 AGENT_LIST_PREFIX = 'lootlist_cs2gc_agents_'
 
 
@@ -66,6 +68,7 @@ def catalogue(source, config):
 
     def add(name, slot, cost, template=None):
         if name in goods: return
+        if name == RADIANT_OFFER and DREAMS_CASE in cases: return
         cost = FIXED_PRICES.get(name, cost)
         values = dict(template or {})
         values.update(item_name=name, points=str(cost), local_rotation_slot=slot)
@@ -77,7 +80,7 @@ def catalogue(source, config):
     for key, value in campaign:
         if key != 'operational_point_redeemable' or not isinstance(value, list): continue
         data = as_dict(value); name = data['item_name']
-        if name in CUSTOM_CASE_PRICES or name == 'crate_cs2gc_karambit' or data.get('local_rotation_slot') == 'agent':
+        if name in CUSTOM_CASE_PRICES or name in ('crate_cs2gc_karambit', DREAMS_CASE) or data.get('local_rotation_slot') == 'agent':
             continue
         if name == 'lootlist:removed_items' and (not config['armory_howl_enabled'] or anime_case): continue
         if not all(isinstance(v, str) for v in data.values()): raise ValueError('Unknown nested Armory goods field')
@@ -154,7 +157,12 @@ def catalogue(source, config):
     for name in sorted(cases):
         # Our grant-only test cases are never sold; the custom weapon cases are, like any case.
         if name.startswith('crate_cs2gc_') or name in ROTATION_EXCLUDED_CASES: continue
-        add(name, 'case', 5, {'flags': '2'})
+        # Dreams & Nightmares uses Radiant's slot budget, not a third regular case slot.
+        if name == DREAMS_CASE:
+            add(name, 'collection', 5, {'flags': '2'})
+            goods[name]['ui_order'] = '3'
+        else:
+            add(name, 'case', 5, {'flags': '2'})
     for name in sorted(souvenirs): add(name, 'souvenir', config['armory_souvenir_price'], {'flags': '2'})
     if config['terminals_enabled']:
         for name in sorted(terminals): add(name, 'terminal', 5)

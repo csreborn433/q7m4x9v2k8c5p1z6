@@ -3,11 +3,9 @@
 RELEASE must match data/mod_version.txt. Closing the window saves ui_cs2gc_whatsnew = SEEN_ID through the NEW
 settings bridge (native_newsettings.py), so it appears again only after the next update changes RELEASE.
 """
-import re
-
-RELEASE = '1.2.0-beta.1'
-SEEN_ID = 'r' + re.sub(r'\W', '_', RELEASE) + '_armory_hud_colour'
-DISPLAY_VERSION = 'V1.2'
+RELEASE = '1.0'
+SEEN_ID = 'r1_0'
+DISPLAY_VERSION = 'V' + RELEASE
 TITLE = "WHAT'S NEW IN CS-REBORN"
 SUBTITLE = DISPLAY_VERSION
 # The anime agent portraits are drawn directly below this bulletin.
@@ -15,11 +13,11 @@ AGENTS_AFTER = 'NEW: Anime Case'
 
 # (header, [(bold lead, text)]) in display order.
 SECTIONS = [
-    ("NEW IN V1.2", [
+    ("NEW IN " + DISPLAY_VERSION, [
         ('Armory refresh', 'a fixed 4/3/4 page. Top: Missing Link Charms (3 stars), a sticker capsule (2), the '
                            'stkr craft stickers (2) and a Name Tag (1). Middle: the Sport & Field Collection (10), '
-                           'the Anime Case (50) and the new glove-only Gauntlet Case (5). Bottom: two official gun '
-                           'collections (5 each), the Dead Hand Terminal (5) and the new Vanilla Knife Case (15).'),
+                           'the Anime Case (50) and the new glove-only Gauntlet Case (5). Bottom: Overpass 2024 (5), '
+                           'Dreams & Nightmares Case (5), the Dead Hand Terminal (5) and the new Vanilla Knife Case (15).'),
         ('Vanilla Knife Case', 'opens without a key and gives one random vanilla knife, with a chance of StatTrak. '
                                'Karambit Cases you already own still open normally.'),
         ('HUD colour menu', 'NEW SETTINGS now has a HUD & SMOKE COLOUR dropdown. Pick any HUD colour and your thrown '
@@ -29,8 +27,6 @@ SECTIONS = [
                           'CS2 and open the launcher again: it downloads and installs the update before you play.'),
         ('Progress stays safe', 'updates never replace your stars, inventory, statistics or settings. The launcher '
                                 'also saves a Before-Update copy of your progress before installing a new version.'),
-    ]),
-    ("FROM V1.1", [
         ('NEW: Anime Case', '50 stars, no key. Unlock Goku, Itachi, Naruto, Kakashi or Sakura as standalone agents '
                             'for both teams, with their own hands and native 3D inspection. Sakura is red, '
                             'Goku and Itachi pink, Naruto and Kakashi purple.'),
