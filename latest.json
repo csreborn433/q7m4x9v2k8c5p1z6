@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "commit": "5123e9ddb4735469a46e2be55555d029c3125d5c",
+  "commit": "53c5a6c2edee42e022e4c9250b2b334fe8ace003",
   "version": "1.0",
   "supported_build": {
     "steam_build": "25966348",
@@ -94,8 +94,8 @@
     "game/bin/win64/cs2_gc_black_market_case.png": "c7c86aff3fa94a5a8f80f44a7624dddbe33399a250afaabda572ec32cdebae1d",
     "game/bin/win64/cs2_gc_disable_vpks.cmd": "0fe0f51ce50cdca779626456ddcb63e2306dfd43af89b35db3104aba1a5387d7",
     "game/bin/win64/cs2_gc_gauntlet_case.png": "116405a5f79fdd391ec65514805107916e8c0dcae064b2d8fc6cbad56315d7b3",
-    "game/bin/win64/cs2_gc_intro_assets/intro.webm": "28475052d0ff3ab8753a17bfe5c0ea2869dfe9cc55abe9a5e29657feb96ec4e5",
-    "game/bin/win64/cs2_gc_intro_assets/intro720p.webm": "844af40940ad5e653a765df0e4830607dcbfdc496fdab128e956ba32a16ab6ab",
+    "game/bin/win64/cs2_gc_intro_assets/intro.webm": "a133d61e47f523cec4df56cb73f64ae9e9b30f8be2ac90a1151bf63952d7dc20",
+    "game/bin/win64/cs2_gc_intro_assets/intro720p.webm": "0ba8cac08d8d2a7102b48958504a4415826150288e16d2bb45710d3ee23809c3",
     "game/bin/win64/cs2_gc_mod_icon.png": "f505bca965c8719b46d73fb334f08eb9526ea6828fbd358e46524f816234cbb7",
     "game/bin/win64/cs2_gc_remove_vpks.cmd": "93ab25cb1942f67f8fd28a65bc0be11ee8d34b583aed8c468a3af50e88744af4",
     "game/bin/win64/cs2_gc_vanilla_case.png": "76639eca5c77a7732af6355a98d5ddf808a52c0bbb0812e814d7b0be25a2ab8c",
@@ -192,7 +192,7 @@
     "game/bin/win64/weapon_patterns/prismatic_facets.png": "be3e74a9bf75ddc3590c933982a183ba0f04c1e64123ed3dc2a527de8fddd843",
     "game/bin/win64/weapon_patterns/tidal_contour.png": "a4393d38aec76f9c613f1334402dcfc55737e9bcab54272d6d0b828922f9fcfb",
     "game/bin/win64/weapon_patterns/vector_lattice.png": "7fb462af45ae4fdd5053d2d5b533ab925d08093acce29206f1c45b3564d64a10",
-    "game/bin/win64/whats_new.py": "fdf997f06b4cba5797e894a62bfcc2bbe1bdafbca421aac188c36877489284d8",
+    "game/bin/win64/whats_new.py": "58785d4541c062da1fc95702a88cfc781a1dc7d72ae7092492706de8acdd65d5",
     "game/bin/win64/zstd_decode.py": "d155fa2c77b90e295ca19fc56fac20fc36d27be45918a2a0ae9965f2f951b584",
     "game/bin/win64/cs2_gc_anime_agent_assets/cs2_gc_anime_agents_manifest.json": "a75ed5a60f066b57a9cbf1e877eca68520ec047a70ea8082671c0b2963b87373",
     "game/bin/win64/cs2_gc_anime_agent_assets/pak01_dir.vpk": "7a4328394a0f770aa229b959e3b362fadabd7b9465b73f2bcf5c5b8aa21e4443",
@@ -203,8 +203,8 @@
     "Launch CS2 GC.exe": "4c4a7eb711b88537fab9a937bb18e872377203c7a3286c96af9b1796b3b3b700",
     "game/bin/win64/cs2_gc_payload/steam_api64.dll": "ecae9416e6ea7f71ec78970a9d768a6d385152cbaf9a36b0f5fc0b0706a67e4d",
     "game/bin/win64/gold_pools.txt": "45ffc1aa24548f5161d1274d311a6d5e45c4ea17e1515ab840613a8d05496166",
-    "game/bin/win64/cs2_gc_payload/bots/bot_improver.zip": "b519d6e6d3849942daee3fc4459bb34139d277b3d70f07c1f65b5aaa30522379",
-    "game/bin/win64/cs2_gc_payload/bots/bundle.json": "f22409adb013352f6d33567fcc017e61d8170e45eb1358d38fbca424f63899d3",
+    "game/bin/win64/cs2_gc_payload/bots/bot_improver.zip": "bde9406c69945cb7ae0e1af29ba090530d78cda0a3c1ed774343cf350d759399",
+    "game/bin/win64/cs2_gc_payload/bots/bundle.json": "5868016d9a36e482ca1b270b62122aac2722b52f1112851644fd021a22849223",
     "game/bin/win64/cs2_gc_payload/bots/resources/overrides/Low/botprofile.db": "c392b1f07b85fdc6fb5032c4c18c8b9662c7f9642b3dcded1ad3c61989f60f53",
     "game/bin/win64/cs2_gc_payload/bots/resources/overrides/Medium/botprofile.db": "82df33bcec25fd5f199599d5bfbbf2e9a2828dbd1b65c070ca561f16370e910d",
     "game/bin/win64/cs2_gc_payload/bots/resources/overrides/High/botprofile.db": "3b192024382eee76028d42e0f06ff453fb9093332136c77ffc3810d742207986",
@@ -248,5 +248,5 @@
     "game/bin/win64/cs2_gc_python/python.cat": "5d85439736ae088d9680b391e2bca55ca7e9cc5b41a12ebe8e2f554506c7e72e",
     "game/bin/win64/cs2_gc_python/python312._pth": "e13f935b36f3bee77503c5986cefc2353ffb6c7a9eaa3da1e0c625d19f2b5252"
   },
-  "feed_commit": "625ede8fcb00cba4894cd50bd12d8fb94c2e5a31"
+  "feed_commit": "50a1201794f34bed0e40aa9df08eca5403bdfebc"
 }
