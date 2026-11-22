@@ -1,4 +1,4 @@
-"""Restrict local Play to Wingman on Overpass and bundled Cobblestone."""
+"""Restrict local Play to Wingman on bundled Cobblestone."""
 import json
 import hashlib
 import re
@@ -130,6 +130,8 @@ def install_cobblestone_resources(proxy_directory, source=MAP_RESOURCES):
 
 
 def patch_gamemodes(source, include_cobblestone=True):
+    if not include_cobblestone:
+        raise ValueError('Cobblestone is required for the Play menu.')
     game_modes = parse_keyvalues(source).one('GameModes.txt')
     mapgroups = game_modes.one('mapgroups')
     mapgroups.one('mg_de_overpass')
@@ -151,9 +153,7 @@ def patch_gamemodes(source, include_cobblestone=True):
         close_line_start = source.rfind('\n', 0, node.end - 1) + 1
         close_indent = source[close_line_start:node.end - 1]
         entry_indent = close_indent + '\t'
-        entries = [entry_indent + '"mg_de_overpass"\t\t"0"']
-        if include_cobblestone:
-            entries.append(entry_indent + '"mg_cobblewingman"\t"1"')
+        entries = [entry_indent + '"mg_cobblewingman"\t"0"']
         entries.append(close_indent)
         return newline + newline.join(entries)
 
@@ -234,7 +234,7 @@ SCRIPT=r'''
         UiToolkitAPI.ShowGenericPopupOk('Online Match',
             (m_localOnline?'Every map you start here is an online server your friends can join:\n\n':
                 'Online hosting is off (network_server = 0 in cs2_gc_gameplay.cfg).\n\n')+
-            'Steam: invite friends to your party before pressing GO; both maps use the native lobby start.\n\n'+
+            'Steam: invite friends to your party before pressing GO; Cobblestone uses the native lobby start.\n\n'+
             'Hamachi, LAN or internet: friends open the console (~) and type\n'+
             (lines.length?lines.join('\n'):'connect <your LAN/Hamachi IP>:27015')+'\n\n'+
             (pw?'Server password: '+pw+'\n\n':'')+
@@ -465,7 +465,7 @@ SCRIPT=r'''
 
 def patch(source,maps,online=True):
     start_search = '    function StartSearch() {'
-    # Both registered mapgroups must use native StartMatchmaking so the Steam party follows.
+    # Use native StartMatchmaking so the Steam party follows.
     host_online = '''
         if (m_serverSetting === 'listen' && !m_isWorkshop && LobbyAPI.BIsHost()) {
             _LocalApplyHostOnline();
@@ -575,9 +575,7 @@ def patch(source,maps,online=True):
 
 def prepare(directory,config):
     game=Path(directory).resolve().parents[1]
-    if not (game/'csgo/maps/de_overpass.vpk').is_file():
-        raise ValueError('The supported game installation is missing de_overpass.vpk.')
-    maps=['de_overpass']
+    maps=[WORKSHOP_MAP]
     extra=[]
     mod = game / LOCAL_PLAY_FOLDER
     map_path = mod / MAP_ARCHIVE
@@ -591,8 +589,9 @@ def prepare(directory,config):
         shutil.copyfile(MAP_ASSET, staged_path)
         validate_map_archive(staged_path)
     if map_path.is_file() or staged_map:
-        maps.append(WORKSHOP_MAP)
         resources_result = install_cobblestone_resources(directory)
+    else:
+        raise ValueError('The bundled Cobblestone map package is missing; no replacement map was enabled.')
     gamemodes=vpk_file(game/'csgo/pak01_dir.vpk','gamemodes.txt').decode('utf-8-sig')
     patched_gamemodes=patch_gamemodes(gamemodes, include_cobblestone=WORKSHOP_MAP in maps)
     extra.append(('gamemodes.txt',patched_gamemodes.encode('utf-8')))
@@ -622,4 +621,4 @@ def prepare(directory,config):
             staged_map.cleanup()
     if map_path.is_file():
         return result+'; bundled Cobblestone map installed in the native map path; '+resources_result
-    return result+'; bundled Cobblestone map package is missing, Overpass only'
+    raise ValueError('Cobblestone map installation did not complete.')

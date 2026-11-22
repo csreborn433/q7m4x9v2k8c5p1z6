@@ -21,14 +21,48 @@ SOCIAL_MENU = r"""
             }
             return null;
         }
-        function _LocalShowPlayers() {
-            if (_LocalInMatch() || _cs2gcPartyMenu.FindChildTraverse('cs2gc-players')) return;
+        function _LocalPartiesScreenOpen() {
+            const screen = _cs2gcPartyMenu.FindChildTraverse('cs2gc-parties-screen');
+            return !!screen && screen.IsValid() && !screen.__closing;
+        }
+        function _LocalPartiesScreenClose() {
+            const screen = _cs2gcPartyMenu.FindChildTraverse('cs2gc-parties-screen');
+            if (!screen || screen.__closing) return;
+            screen.__closing = true;
+            if (screen.__closePlayers) screen.__closePlayers();
+            _LocalPartyClose(m_localPartyUi);
+            screen.DeleteAsync(0);
+        }
+        // PARTIES opens from the left-hand button: the party browser first, the player directory underneath it.
+        function _LocalShowPartiesScreen() {
+            if (_LocalInMatch() || !m_localMenuVisible || _cs2gcPartyMenu.FindChildTraverse('cs2gc-parties-screen')) return;
             _LocalHideRecentPulls(_cs2gcPartyMenu);
-            const screen = $.CreatePanel('Panel', _cs2gcPartyMenu, 'cs2gc-players');
+            const screen = $.CreatePanel('Panel', _cs2gcPartyMenu, 'cs2gc-parties-screen');
             Object.assign(screen.style, {width:'100%', height:'100%', backgroundColor:'#000000b0', zIndex:'1000'});
             screen.hittest = true;
             const card = $.CreatePanel('Panel', screen, '');
-            Object.assign(card.style, {width:'680px', height:'72%', flowChildren:'down', padding:'24px',
+            Object.assign(card.style, {width:'760px', height:'88%', horizontalAlign:'center', verticalAlign:'center',
+                flowChildren:'down', backgroundColor:'#15181dfa', borderRadius:'6px', border:'1px solid #ffffff1a'});
+            const bar = $.CreatePanel('Panel', card, '');
+            Object.assign(bar.style, {width:'100%', flowChildren:'right', padding:'14px 24px 0px 24px'});
+            const title = _LocalWhatsNewLabel(bar, 'PARTIES', 'stratum-bold-condensed', 34, '#ffffff');
+            title.style.width = 'fill-parent-flow(1)';
+            _LocalPartyButton(bar, 'cs2gc-parties-close', 'CLOSE', _LocalPartiesScreenClose).style.marginRight = '0px';
+            const content = $.CreatePanel('Panel', card, 'cs2gc-parties-content');
+            Object.assign(content.style, {width:'100%', height:'fill-parent-flow(1)', flowChildren:'down',
+                overflow:'squish scroll'});
+            const parties = $.CreatePanel('Panel', content, 'cs2gc-parties-host-area');
+            Object.assign(parties.style, {width:'100%', height:'430px'});
+            _LocalShowParties(parties);
+            _LocalShowPlayers(content);
+        }
+        function _LocalShowPlayers(parent) {
+            if (_LocalInMatch() || _cs2gcPartyMenu.FindChildTraverse('cs2gc-players')) return;
+            const screen = $.CreatePanel('Panel', parent, 'cs2gc-players');
+            Object.assign(screen.style, {width:'100%', height:'440px', backgroundColor:'#15181dfa'});
+            screen.hittest = true;
+            const card = $.CreatePanel('Panel', screen, '');
+            Object.assign(card.style, {width:'100%', height:'100%', flowChildren:'down', padding:'24px',
                 horizontalAlign:'center', verticalAlign:'center', backgroundColor:'#15181dfa'});
             _LocalWhatsNewLabel(card,'LEADERBOARDS','stratum-bold-condensed',32,'#ffffff');
             _LocalWhatsNewLabel(card,'Steam profiles discovered on this device, newest discoveries first. ' +
@@ -52,11 +86,11 @@ SOCIAL_MENU = r"""
                 GameInterfaceAPI.SetSettingString('cs2gc_players_page','');
                 screen.DeleteAsync(0);
             }
-            _LocalPartyButton(actions,'cs2gc-players-close','CLOSE',close);
+            _cs2gcPartyMenu.FindChildTraverse('cs2gc-parties-screen').__closePlayers = close;
             function tick() {
                 timer = null;
                 if (!screen.IsValid()) return;
-                if (!m_localMenuVisible || _LocalInMatch()) { close(); return; }
+                if (!m_localMenuVisible || _LocalInMatch() || !_LocalPartiesScreenOpen()) { close(); return; }
                 const header = _LocalPartySetting('cs2gc_players_page').split('|');
                 const total = Number(header[2]);
                 const self = String(MyPersonaAPI.GetXuid());
@@ -82,7 +116,6 @@ SOCIAL_MENU = r"""
                             : 'No players discovered yet. Browse or host a party.';
                     }
                 } else if (ticks > 6) status.text = 'Player directory unavailable. Launch the mod with Steam online.';
-                if (ticks % 10 === 0) $.Msg('CS2GC_PARTY refresh');
                 ticks++;
                 GameInterfaceAPI.ConsoleCommand('exec cs2gc_players');
                 timer = $.Schedule(1,tick);
@@ -94,7 +127,7 @@ SOCIAL_MENU = r"""
             const column = _cs2gcPartyMenu.FindChildTraverse('JsRightColumn');
             if (!home || !home.checked || _m_activeTab || !column || column.BHasClass('hidden') ||
                 _cs2gcPartyMenu.BHasClass('MainMenuRootPanel--PauseMenuMode') ||
-                _cs2gcPartyMenu.FindChildTraverse('cs2gc-whatsnew') || _cs2gcPartyMenu.FindChildTraverse('cs2gc-players')) {
+                _cs2gcPartyMenu.FindChildTraverse('cs2gc-whatsnew') || _LocalPartiesScreenOpen()) {
                 if (box) box.visible = false;
                 return;
             }
@@ -153,7 +186,7 @@ SOCIAL_MENU = r"""
         function _LocalSocialTick() {
             const home = _cs2gcPartyMenu.FindChildInLayoutFile('MainMenuNavBarHome');
             _LocalRecentPulls(home);
-            if (partyNav && partyNav.checked && _LocalPartySession() && !LobbyAPI.BIsHost())
+            if (_LocalPartiesScreenOpen() && _LocalPartySession() && !LobbyAPI.BIsHost())
                 GameInterfaceAPI.ConsoleCommand('exec cs2gc_follow');
         }
 """

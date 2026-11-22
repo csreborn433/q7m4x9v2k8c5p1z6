@@ -3,8 +3,8 @@
 RELEASE must match data/mod_version.txt. Closing the window saves ui_cs2gc_whatsnew = SEEN_ID through the NEW
 settings bridge (native_newsettings.py), so it appears again only after the next update changes RELEASE.
 """
-RELEASE = '1.0.2'
-SEEN_ID = 'r1_0_2'
+RELEASE = '1.0.3'
+SEEN_ID = 'r1_0_3'
 DISPLAY_VERSION = 'V1.0'  # Patch releases share one player-facing bulletin.
 TITLE = "WHAT'S NEW IN CS-REBORN"
 SUBTITLE = DISPLAY_VERSION
@@ -15,11 +15,17 @@ AGENTS_AFTER = 'NEW: Anime Case'
 SECTIONS = [
     ("NEW IN " + DISPLAY_VERSION, [
         ('Launch banner', 'Play shows a CS:REBORN loading banner while your game is being prepared.'),
-        ('Parties', 'open the Parties tab to host or join a Steam lobby. Your hosted party appears first in the list. '
-                    'Choose a map in Play when everyone is ready. '
-                    'If native party travel does not connect you, use Copy Connect.'),
-        ('Leaderboards', 'open Steam profiles discovered on this device. Recently Unboxed now shows your last '
-                         'four pulls on Home, with float and seed for painted items.'),
+        ('Black Market', 'the former Parties tab is now BLACK MARKET: six tall offers drawn at random for your '
+                         'account and then fixed, so they never change. Click a card to reveal a rare '
+                         'gun or knife finish, then buy it for 30 stars. Each offer can be bought once.'),
+        ('Parties', 'PARTIES now sits in the left column, where Leaderboards used to be. Host or join a Steam '
+                    'lobby; your hosted party appears first in the list. Choose a map in Play when everyone is '
+                    'ready. If native party travel does not connect you, use Copy Connect.'),
+        ('Leaderboards', 'now lives inside PARTIES, underneath the party browser, and opens Steam profiles '
+                         'discovered on this device. Recently Unboxed shows your last four pulls on Home, with '
+                         'float and seed for painted items.'),
+        ('Cobblestone only', 'Play now offers just Cobblestone in Casual, Competitive and Wingman. '
+                             'Overpass is removed from the list.'),
         ('Armory refresh', 'a fixed 4/3/4 page. Top: Missing Link Charms (3 stars), a sticker capsule (2), the '
                            'stkr craft stickers (2) and a Name Tag (1). Middle: the Sport & Field Collection (10), '
                            'the Anime Case (50) and the new glove-only Gauntlet Case (15). Bottom: Overpass 2024 (5), '

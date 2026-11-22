@@ -22,7 +22,7 @@ EXCLUDED_NAMES = {'items_game.txt','steam_api64_real.dll','steam_api64.dll',
                   'cs2_gc_inventory.txt','cs2_gc_finish_ids.json','cs2_gc.cfg','cs2_gc_gameplay.cfg'}
 ADMIN_TOOLS = {'settings_editor.py', 'grant_custom_cases.py', 'grant_test_items.py',
                'reset_profile.py', 'cs2_gc_reset_profile.cmd', 'repair_inventory.cmd',
-               'publish_update_feed.py'}
+               'publish_update_feed.py', 'prime_karambit_port.py'}
 COBBLESTONE_VPKS = {
     'map_assets/cobblewingman.vpk',
     'map_assets/cobblestone_resources/pak01_dir.vpk',

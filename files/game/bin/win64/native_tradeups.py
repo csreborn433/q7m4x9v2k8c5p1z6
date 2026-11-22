@@ -181,8 +181,11 @@ def prepare(proxy_directory, enabled=True, config=None):
     catalogue_enabled = bool(config and config['armory_rotation_enabled'])
     finishes_enabled = bool(config and config.get('knife_finishes', 1))
     from native_agents import installed_manifest, prepare_schema as prepare_agents
+    from native_prime_karambit import installed_manifest as prime_manifest, prepare_schema as prepare_prime
     agents_enabled = installed_manifest(proxy_directory) is not None
-    if not enabled and not catalogue_enabled and not finishes_enabled and not agents_enabled:
+    prime = prime_manifest(proxy_directory)
+    prime_enabled = prime is not None and prime.get('enabled', True)
+    if not enabled and not catalogue_enabled and not finishes_enabled and not agents_enabled and not prime_enabled:
         if not manifest_path.exists(): return 'disabled'
         manifest = json.loads(read_text(manifest_path))
         if manifest.get('owner') != OWNER: raise ValueError('Native folder is not owned by this feature')
@@ -205,6 +208,8 @@ def prepare(proxy_directory, enabled=True, config=None):
             raise ValueError('Finish preparation failed; launch stopped to avoid mismatched schema/material/family files: ' + str(error)) from error
     if agents_enabled:
         patched, details['anime_agents'] = prepare_agents(proxy_directory, config or {}, patched)
+    if prime_enabled:
+        patched, details['prime_karambit'] = prepare_prime(proxy_directory, config or {}, patched)
     if catalogue_enabled:
         from armory_rotation_catalog import patch_catalogue
         patched, catalogue = patch_catalogue(patched, config)

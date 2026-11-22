@@ -455,17 +455,18 @@ class Rig:
         self.index = {name: i for i, name in enumerate(self.names)}
 
 
-def retarget(old, old_frames, old_idle, rig, new_idle):
-    """Map old local frames onto the rig. ``new_idle`` holds the rig's local idle pose (primary + secondary)."""
+def retarget(old, old_frames, old_idle, rig, new_idle, *, mapping=None):
+    """Map local frames onto the rig, using CS:GO names unless an explicit bone mapping is supplied."""
     old_idle_ms = to_model(old_idle, old.parents)
     new_idle_ms = to_model(new_idle, rig.parents)
-    mapping = dict(legacy_bone_map(old.bones))
-    secondary_names = rig.names[rig.primary_count:]
-    mapping.update(weapon_bone_map(old.bones, secondary_names))
-    # Dual pistols keep one gun root per hand in the weapon skeleton; CS2 leaves ``wpn`` still for them.
-    exact = {name.lower(): name for name in secondary_names if name.lower() not in ('weapon', 'weapon_offset')}
-    for old_name in old.bones:
-        if old_name.lower() in exact: mapping[old_name] = exact[old_name.lower()]
+    if mapping is None:
+        mapping = dict(legacy_bone_map(old.bones))
+        secondary_names = rig.names[rig.primary_count:]
+        mapping.update(weapon_bone_map(old.bones, secondary_names))
+        # Dual pistols keep one gun root per hand in the weapon skeleton; CS2 leaves ``wpn`` still for them.
+        exact = {name.lower(): name for name in secondary_names if name.lower() not in ('weapon', 'weapon_offset')}
+        for old_name in old.bones:
+            if old_name.lower() in exact: mapping[old_name] = exact[old_name.lower()]
     pairs = {}
     for old_name, new_name in mapping.items():
         if new_name in rig.index:

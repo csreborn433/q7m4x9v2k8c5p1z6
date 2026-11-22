@@ -36,6 +36,7 @@ from native_resources import ensure_first_game_path, install_override
 from vpk_signatures import update as signatures
 from preparation_cache import PreparationCache
 from native_agents import prepare as anime_agents, install_bundle as anime_bundle
+from native_prime_karambit import prepare as prime_karambit
 
 
 
@@ -100,6 +101,7 @@ def prepare(directory, force_rebuild=False):
               ' [%.2fs]' % (time.perf_counter() - step), flush=True)
     print('Finish resources: ' + mount_finish_resources(directory, config), flush=True)
     print('Anime agents: ' + anime_agents(directory, config), flush=True)
+    print('Prime Karambit: ' + prime_karambit(directory, config), flush=True)
     print('Intro movie: ' + intro_movie(directory, source=Path(__file__).resolve().parent/'cs2_gc_intro_assets'), flush=True)
     print('Chicken Cosmetics: ' + chicken_cosmetics(directory,config),flush=True)
     print('Music-kit Store: ' + music_store(directory,config),flush=True)

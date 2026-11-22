@@ -4,6 +4,7 @@ Installed mainmenu.vts_c is patched in its own VPK.
 """
 from native_resources import install_override
 from native_social import SOCIAL_MENU
+from native_black_market import BLACK_MARKET
 import json
 import re
 
@@ -12,7 +13,7 @@ WEBSITE_URL = 'https://csreborn.base44.app/'
 DEVELOPER_PROFILE_URL = 'https://steamcommunity.com/id/DARKKNIGHTHOURS/'
 PARTIES_NAV = """
         const partyNav = $.GetContextPanel().FindChildInLayoutFile('MainMenuNavBarNews');
-        if (partyNav) partyNav.FindChildrenWithClassTraverse('mainmenu-top-navbar__radio-btn__label').forEach(label => label.text = 'PARTIES');
+        if (partyNav) partyNav.FindChildrenWithClassTraverse('mainmenu-top-navbar__radio-btn__label').forEach(label => label.text = 'BLACK MARKET');
 """
 MAINMENU_BETA = """
         const column = $.GetContextPanel().FindChildTraverse('JsLeftColumn');
@@ -173,7 +174,7 @@ ARMORY_ONLY = """
             const holdsArmory = panel => !!panel.FindChildTraverse('id-btn-open-xpshop');
             column.Children().forEach(child => {
                 if (!holdsArmory(child) && child.id !== 'cs2gc-beta-indicator' && child.id !== 'cs2gc-whatsnew-button' &&
-                    child.id !== 'cs2gc-leaderboards-button' && child.id !== 'cs2gc-developer-button' &&
+                    child.id !== 'cs2gc-parties-button' && child.id !== 'cs2gc-developer-button' &&
                     child.id !== 'cs2gc-update-banner')
                     _LocalCollapse(child);
             });
@@ -199,8 +200,8 @@ MENU_REFRESH = """
             _LocalHideNewPopular($.GetContextPanel());
             _LocalHideClientUpdate($.GetContextPanel());
             __ARMORY__
-            const tab = partyNav && partyNav.checked && _cs2gcPartyMenu.FindChildTraverse('cs2gc-party-tab');
-            if (tab) _LocalShowParties(tab);
+            const marketTab = partyNav && partyNav.checked && _cs2gcPartyMenu.FindChildTraverse('cs2gc-party-tab');
+            if (marketTab) _LocalShowBlackMarket(marketTab);
             _LocalSocialTick();
             m_localMenuTimer = $.Schedule(2, _LocalRefreshVisibleMenu);
         }
@@ -560,7 +561,7 @@ PARTIES = """
         function _LocalPartyTick(ui) {
             ui.timer = null;
             if (ui !== m_localPartyUi || ui.closing || !ui.overlay.IsValid()) return;
-            if (_LocalInMatch() || !m_localMenuVisible || !partyNav || !partyNav.checked) {
+            if (_LocalInMatch() || !m_localMenuVisible || !_LocalPartiesScreenOpen()) {
                 _LocalPartyClose(ui);
                 return;
             }
@@ -605,18 +606,17 @@ PARTIES = """
             }
             const overlay = $.CreatePanel('Panel', tab, 'cs2gc-parties');
             overlay.hittest = true;
-            Object.assign(overlay.style, {width: '100%', height: '100%', backgroundColor: '#000000c0', opacity: '0',
+            Object.assign(overlay.style, {width: '100%', height: '100%', backgroundColor: '#15181df8', opacity: '0',
                 transitionProperty: 'opacity', transitionDuration: '0.2s', zIndex: '1000'});
             const card = $.CreatePanel('Panel', overlay, '');
-            Object.assign(card.style, {width: '760px', height: '82%', horizontalAlign: 'center', verticalAlign: 'center',
+            Object.assign(card.style, {width: '100%', height: '100%', horizontalAlign: 'center', verticalAlign: 'center',
                 flowChildren: 'down', backgroundColor: '#15181df8', borderRadius: '6px', border: '1px solid #ffffff1a',
                 boxShadow: '0px 0px 32px 4px #000000e0'});
             const stripe = $.CreatePanel('Panel', card, '');
             Object.assign(stripe.style, {width: '100%', height: '5px', borderRadius: '6px 6px 0px 0px',
                 backgroundColor: 'gradient(linear, 0% 0%, 100% 0%, from(#e8326e), to(#ff8a1f))'});
             const header = $.CreatePanel('Panel', card, '');
-            Object.assign(header.style, {width: '100%', flowChildren: 'down', padding: '26px 32px 16px 32px'});
-            _LocalWhatsNewLabel(header, 'PARTIES', 'stratum-bold-condensed', 34, '#ffffff');
+            Object.assign(header.style, {width: '100%', flowChildren: 'down', padding: '12px 24px 8px 24px'});
             _LocalWhatsNewLabel(header, 'Join a lobby to follow the host into Play. If Steam does not take you into ' +
                 'the match, use the host\\'s connect command. Direct connections need a reachable server.', 'stratum-regular', 17, '#aeb6c2');
             const rule = $.CreatePanel('Panel', card, '');
@@ -662,40 +662,40 @@ PARTIES = """
             const footer = $.CreatePanel('Panel', card, '');
             Object.assign(footer.style, {width: '100%', flowChildren: 'right', padding: '14px 32px 24px 32px',
                 borderTop: '1px solid #ffffff1a'});
-            _LocalWhatsNewLabel(footer, 'You can switch tabs without leaving your lobby.', 'stratum-regular', 15, '#aeb6c2');
+            _LocalWhatsNewLabel(footer, 'Closing this window does not leave your lobby.', 'stratum-regular', 15, '#aeb6c2');
             m_localPartyUi = ui;
             _LocalPartyTick(ui);
             $.Schedule(0.05, () => { if (overlay.IsValid() && !ui.closing) overlay.style.opacity = '1'; });
         }
-        function _LocalLeaderboardsButton() {
+        function _LocalPartiesButton() {
             const column = _cs2gcPartyMenu.FindChildTraverse('JsLeftColumn');
             const whatsNew = column && column.FindChildTraverse('cs2gc-whatsnew-button');
             if (!column || !whatsNew) return;
-            let button = column.FindChildTraverse('cs2gc-leaderboards-button');
+            let button = column.FindChildTraverse('cs2gc-parties-button');
             if (!button) {
-                button = $.CreatePanel('Button', column, 'cs2gc-leaderboards-button');
+                button = $.CreatePanel('Button', column, 'cs2gc-parties-button');
                 button.hittest = true;
                 Object.assign(button.style, {width: '256px', height: '46px', marginBottom: '8px', flowChildren: 'right',
                     padding: '0px 14px', backgroundColor: '#15181de6', borderRadius: '4px', border: '1px solid #ffffff1a',
                     borderLeft: '3px solid #e8326e', transitionProperty: 'background-color', transitionDuration: '0.15s'});
-                const label = _LocalWhatsNewLabel(button, 'LEADERBOARDS', 'stratum-bold-condensed', 20, '#ffffff');
+                const label = _LocalWhatsNewLabel(button, 'PARTIES', 'stratum-bold-condensed', 20, '#ffffff');
                 Object.assign(label.style, {width: 'fill-parent-flow(1.0)', verticalAlign: 'center', letterSpacing: '1px'});
-                const online = _LocalWhatsNewLabel(button, 'PLAYERS', 'stratum-regular', 15, '#aeb6c2');
+                const online = _LocalWhatsNewLabel(button, 'LOBBY', 'stratum-regular', 15, '#aeb6c2');
                 Object.assign(online.style, {width: 'fit-children', verticalAlign: 'center'});
                 [label, online].forEach(child => child.hittest = false);
                 button.SetPanelEvent('onmouseover', () => button.style.backgroundColor = '#262b33f0');
                 button.SetPanelEvent('onmouseout', () => button.style.backgroundColor = '#15181de6');
             }
-            button.SetPanelEvent('onactivate', _LocalShowPlayers);
+            button.SetPanelEvent('onactivate', _LocalShowPartiesScreen);
             column.MoveChildAfter(button, whatsNew);
         }
-        _LocalLeaderboardsButton();
+        _LocalPartiesButton();
 """
 DEVELOPER = """
-        // A compact button above Leaderboards opens the developer's Steam profile.
+        // A compact button below Parties opens the developer's Steam profile.
         function _LocalDeveloperButton() {
             const column = _cs2gcPartyMenu.FindChildTraverse('JsLeftColumn');
-            const parties = column && column.FindChildTraverse('cs2gc-leaderboards-button');
+            const parties = column && column.FindChildTraverse('cs2gc-parties-button');
             if (!column || !parties) return;
             let button = column.FindChildTraverse('cs2gc-developer-button');
             if (!button) {
@@ -753,7 +753,7 @@ UPDATE_BANNER = """
             banner.style.visibility = version ? 'visible' : 'collapse';
             if (!version) return;
             banner.__cs2gcVersion.text = 'Version ' + version + ' is ready to download';
-            const above = ['cs2gc-developer-button', 'cs2gc-leaderboards-button', 'cs2gc-whatsnew-button']
+            const above = ['cs2gc-developer-button', 'cs2gc-parties-button', 'cs2gc-whatsnew-button']
                 .map(id => column.FindChildTraverse(id)).find(panel => panel);
             if (above) column.MoveChildAfter(banner, above);
         }
@@ -1113,7 +1113,7 @@ def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
                           HIDE_NEW_POPULAR + HIDE_CLIENT_UPDATE_BUTTON +
                           (ARMORY_ONLY if hide_promo else "") +
                           MENU_REFRESH.replace('__ARMORY__', '_LocalKeepOnlyArmory();' if hide_promo else '') +
-                          whats_new_script() + PARTIES + SOCIAL_MENU +
+                          whats_new_script() + PARTIES + SOCIAL_MENU + BLACK_MARKET +
                           DEVELOPER.replace('__DEVELOPER_PROFILE_URL__', DEVELOPER_PROFILE_URL) + UPDATE_BANNER +
                           '\n        _LocalRefreshVisibleMenu();\n', 1)
     source=source.replace(HIDE_ANCHOR, HIDE_ANCHOR + hide_pulls + '''
