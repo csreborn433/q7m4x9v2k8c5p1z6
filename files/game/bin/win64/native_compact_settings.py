@@ -208,7 +208,11 @@ def menu_navigation(source):
         if (tab === 'JsSettings')
             $.GetContextPanel().FindChildInLayoutFile(tab).SetAttributeString('set-active-section', setActiveSection);""")
     return _replace(source, '    function _OnShowMainMenu() {', """    function _OnShowMainMenu() {
-        $('#MainMenuNavBarWatch').GetChild(0).SetImage('file://{images}/cs2_gc/new_settings.png');""")
+        // RadioButton prepends its own native child, so look the icon up by class; never block the menu on it.
+        const csWatchNav = $('#MainMenuNavBarWatch');
+        const csWatchIcon = csWatchNav ? csWatchNav.FindChildrenWithClassTraverse('mainmenu-top-navbar__radio-btn__icon')[0] : null;
+        if (csWatchIcon && typeof csWatchIcon.SetImage === 'function')
+            csWatchIcon.SetImage('file://{images}/cs2_gc/new_settings.png');""")
 
 
 def assets(game, config):
