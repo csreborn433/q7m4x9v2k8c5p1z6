@@ -3,8 +3,8 @@
 RELEASE must match data/mod_version.txt. Closing the window saves ui_cs2gc_whatsnew = SEEN_ID through the NEW
 settings bridge (native_newsettings.py), so it appears again only after the next update changes RELEASE.
 """
-RELEASE = '1.0.8'
-SEEN_ID = 'r1_0_8'
+RELEASE = '1.0.9'
+SEEN_ID = 'r1_0_9'
 DISPLAY_VERSION = 'V1.0'  # Patch releases share one player-facing bulletin.
 TITLE = "WHAT'S NEW IN CS-REBORN"
 SUBTITLE = DISPLAY_VERSION

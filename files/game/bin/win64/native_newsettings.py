@@ -5,7 +5,7 @@ import re
 import struct
 
 from native_resources import console_log_path, install_override, mount_gameinfo, read_text
-from native_beta_buy import prepare as prepare_beta_buy
+from native_beta_buy import remove as remove_beta_buy
 from native_tradeups import atomic_write
 from whats_new import SEEN_ID as WHATS_NEW_SEEN
 
@@ -81,12 +81,6 @@ SETTINGS_SCRIPT = r'''
         _CS2GCChoiceRow(content,[
             ['OFF',!lowOn,()=>{_CS2GCSetting('ui_low_end_pc','0');_CS2GCApplyLowEnd(false);_CS2GCBuildNewSettings(panel);}],
             ['ON',lowOn,()=>{_CS2GCSetting('ui_low_end_pc','1');_CS2GCApplyLowEnd(true);_CS2GCBuildNewSettings(panel);}]
-        ]);
-        const beta=GameInterfaceAPI.GetSettingString('ui_cs2gc_buymenu')==='beta';
-        _CS2GCSection(content,'SELECT BUY MENU UI','Choose the current CS2 menu or the beta-inspired buy HUD. Restart CS2 to apply the choice.');
-        _CS2GCChoiceRow(content,[
-            ['CS2',!beta,()=>{_CS2GCSetting('ui_cs2gc_buymenu','cs2');_CS2GCBuildNewSettings(panel);}],
-            ['BETA',beta,()=>{_CS2GCSetting('ui_cs2gc_buymenu','beta');_CS2GCBuildNewSettings(panel);}]
         ]);
     }
     function _CS2GCEnsureNewTab(){
@@ -181,12 +175,11 @@ def prepare(directory, config):
                                   asset='panorama/scripts/hud/hudmoney.vts_c', patch=lambda source: source)
     game = Path(directory).resolve().parents[1]
     values = read_settings(game / 'csgo/cfg')
-    # The incompatible Limited Test wheel always stays unmounted, even when beta styling is selected.
     wheel = disable_legacy_wheel(directory)
-    beta_buy = prepare_beta_buy(directory, values)
+    beta_buy = remove_beta_buy(directory)
     animations = prepare_animations(directory, values)
     return 'settings: ' + settings + '; custom menu: ' + legacy_hud + '; original wheel: ' + wheel + \
-        '; beta buy HUD: ' + beta_buy + '; CS:GO animations: ' + animations
+        '; beta buy HUD removed: ' + beta_buy + '; CS:GO animations: ' + animations
 
 
 def prepare_animations(directory, values):

@@ -844,7 +844,6 @@ CONTROLS_DEFAULTS = """
 WATCH_SETTINGS = """
     // cs2_gc: CS2-style slide toggle, styled inline after slider_toggle.css (the Watch page does not load it).
     const _cs2gcAnimBoot = GameInterfaceAPI.GetSettingString('ui_cs2gc_animations') === 'csgo';
-    const _cs2gcBuyBoot = GameInterfaceAPI.GetSettingString('ui_cs2gc_buymenu') === 'beta';
     const _cs2gcGraphicsBoot = GameInterfaceAPI.GetSettingString('ui_low_end_pc') === '1';
     function _LocalSettingsToggle(parent, id, titleText, description, setting, bootValue, initialValue, liveStatus = null,
                                   values = ['1','0'], bootStatus = ['Low-end graphics active','Default graphics active']) {
@@ -1053,10 +1052,6 @@ WATCH_SETTINGS = """
             graphicsHeading.AddClass('stratum-regular-condensed');
             Object.assign(graphicsHeading.style, {fontSize:'24px', color:'white', marginBottom:'12px'});
             _LocalAnimationToggle(gameplay);
-            _LocalSettingsToggle(gameplay, 'CS2GCBetaBuyToggle', 'BETA BUY HUD',
-                'Arrange your current loadout around a dial. Buy, refund and number keys use the standard CS2 controls. Restart CS2 to apply.',
-                'ui_cs2gc_buymenu', _cs2gcBuyBoot, GameInterfaceAPI.GetSettingString('ui_cs2gc_buymenu') === 'beta',
-                null, ['beta','cs2'], ['Beta buy HUD selected','Stock CS2 buy HUD selected']);
             _LocalHudColourMenu(gameplay);
             _LocalSettingsToggle(graphics, 'CS2GCLowEndGraphicsToggle', 'ENABLE LOW END PC GRAPHICS',
                 'Reduces particles, fog, microshadows, smoke shadows, distant props, textures and old ragdolls. Restart CS2 to apply.',
