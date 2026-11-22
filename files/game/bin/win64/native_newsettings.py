@@ -32,8 +32,8 @@ PREVIOUS_FRAME_LIMITS = [('fps_max', '400', '400'), ('fps_max_ui', '60', '120')]
 DEFAULT_FRAME_LIMITS = [('fps_max', '222'), ('fps_max_ui', '99')]
 LOW_END_JS = '[' + ','.join("['%s','%s','%s']" % row for row in LOW_END) + ']'
 DEFAULTS = {'ui_low_end_pc': '0', 'ui_cs2gc_buymenu': 'cs2', 'ui_cs2gc_animations': 'cs2',
-            'ui_cs2gc_whatsnew': '0', 'ui_cs2gc_smoke': '0'}
-PREVIOUS_KEYS = tuple(key for key in DEFAULTS if key != 'ui_cs2gc_smoke')
+            'ui_cs2gc_whatsnew': '0', 'ui_cs2gc_smoke': '0', 'ui_cs2gc_controls_v1': '0'}
+PREVIOUS_KEYS = tuple(key for key in DEFAULTS if key not in ('ui_cs2gc_smoke', 'ui_cs2gc_controls_v1'))
 WHEEL_FOLDER = 'cs2_gc_buymenu_wheel'
 WHEEL_COMMENT = 'cs2_gc original buy wheel'
 WHEEL_OWNER = 'cs2-gc-original-buy-wheel-v1'
@@ -206,7 +206,7 @@ def prepare_animations(directory, values):
 SETTINGS_CFG = 'cs2_gc_newsettings.cfg'
 # ui_cs2gc_whatsnew only accepts this release's id: an older id is dropped, so the window shows after an update.
 ALLOWED = {'ui_low_end_pc': ('0', '1'), 'ui_cs2gc_buymenu': ('cs2', 'csgo', 'beta'), 'ui_cs2gc_animations': ('cs2', 'csgo'),
-           'ui_cs2gc_whatsnew': ('0', WHATS_NEW_SEEN), 'ui_cs2gc_smoke': ('0', '1')}
+           'ui_cs2gc_whatsnew': ('0', WHATS_NEW_SEEN), 'ui_cs2gc_smoke': ('0', '1'), 'ui_cs2gc_controls_v1': ('1', '0')}
 LEGACY_KEYS = ('ui_cs2gc_buymenu', 'ui_low_end_pc')  # the only keys files from before the animation toggle hold
 LINE = re.compile(rb'CS2GC_SETTING (' + b'|'.join(re.escape(key.encode()) for key in sorted(ALLOWED)) + rb') (\w+)')
 
@@ -252,7 +252,7 @@ def ensure_settings_cfg(cfg_dir):
         legacy = {
             _legacy_settings_cfg(values, graphics=graphics, keys=keys)
             for graphics in previous_presets
-            for keys in (ALLOWED, PREVIOUS_KEYS, LEGACY_KEYS)
+            for keys in (ALLOWED, tuple(k for k in ALLOWED if k != 'ui_cs2gc_controls_v1'), PREVIOUS_KEYS, LEGACY_KEYS)
         }
         if current.replace('\r\n', '\n') in legacy:
             migrated = dict(values, ui_low_end_pc='0')
@@ -266,7 +266,7 @@ def ensure_settings_cfg(cfg_dir):
             for match in re.finditer(r'(?im)^\s*(fps_max(?:_ui)?)\s+\S+', current)
         }
         missing_limits = [limit for limit in DEFAULT_FRAME_LIMITS if limit[0] not in configured_limits]
-        missing_gameplay = [key for key in ('ui_cs2gc_smoke',)
+        missing_gameplay = [key for key in ('ui_cs2gc_smoke', 'ui_cs2gc_controls_v1')
                             if not re.search(r'(?m)^\s*setinfo\s+' + key + r'\s+', current)]
         if missing_limits or missing_gameplay:
             contents = current.rstrip('\r\n')
@@ -308,20 +308,27 @@ class NewSettingsBridge:
     def consume(self, data):
         lines = (self.pending + data).split(b'\n')
         self.pending = lines.pop()[-4096:]
-        changed = False
+        changed = set()
         for line in lines:
             for key, value in LINE.findall(line):
                 key, value = key.decode(), value.decode()
+                if key == 'ui_cs2gc_controls_v1' and value != '1':
+                    continue
                 if value in ALLOWED[key] and self.values.get(key) != value:
                     self.values[key] = value
-                    changed = True
+                    changed.add(key)
         if changed:
             path = self.cfg_dir / SETTINGS_CFG
+            if changed == {'ui_cs2gc_controls_v1'}:
+                contents, count = re.subn(r'(?m)^([ \t]*setinfo[ \t]+ui_cs2gc_controls_v1[ \t]+)\w+',
+                                          r'\g<1>1', read_text(path))
+                atomic_write(path, contents if count else contents.rstrip('\r\n') + '\nsetinfo ui_cs2gc_controls_v1 1\n')
+                return True
             contents = settings_cfg(self.values)
             for name, value in re.findall(r'(?im)^\s*(fps_max(?:_ui)?)\s+(\d+(?:\.\d+)?)\s*$', read_text(path)):
                 contents = re.sub(r'(?m)^' + name.lower() + r' \S+$', name.lower() + ' ' + value, contents)
             atomic_write(path, contents)
-        return changed
+        return bool(changed)
 
     def poll(self):
         if not self.log.exists():

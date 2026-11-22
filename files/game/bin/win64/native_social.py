@@ -125,15 +125,17 @@ SOCIAL_MENU = r"""
         function _LocalRecentPulls(home) {
             let box = _cs2gcPartyMenu.FindChildTraverse('cs2gc-home-pulls');
             const column = _cs2gcPartyMenu.FindChildTraverse('JsRightColumn');
-            if (!home || !home.checked || _m_activeTab || !column || column.BHasClass('hidden') ||
+            const intro = _cs2gcPartyMenu.FindChildInLayoutFile('IntroMovie');
+            if (!home || !home.checked || _m_activeTab || !column || !column.visible || column.BHasClass('hidden') ||
+                (intro && intro.visible && !intro.BIsTransparent()) ||
                 _cs2gcPartyMenu.BHasClass('MainMenuRootPanel--PauseMenuMode') ||
                 _cs2gcPartyMenu.FindChildTraverse('cs2gc-whatsnew') || _LocalPartiesScreenOpen()) {
                 if (box) box.visible = false;
                 return;
             }
             if (!box) {
-                box = $.CreatePanel('Panel', _cs2gcPartyMenu, 'cs2gc-home-pulls');
-                Object.assign(box.style,{width:'24%',maxWidth:'340px',flowChildren:'down',padding:'12px',
+                box = $.CreatePanel('Panel', column, 'cs2gc-home-pulls');
+                Object.assign(box.style,{width:'320px',maxWidth:'100%',flowChildren:'down',padding:'12px',
                     horizontalAlign:'right',verticalAlign:'center',marginRight:'22px',backgroundColor:'#171e25e8',
                     borderRadius:'4px'});
                 box.hittest = false; box.hittestchildren = false;

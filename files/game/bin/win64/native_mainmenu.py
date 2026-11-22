@@ -168,6 +168,7 @@ MENU_REFRESH = """
         function _LocalRefreshVisibleMenu() {
             m_localMenuTimer = null;
             if (!m_localMenuVisible || _LocalInMatch()) { _LocalHideRecentPulls($.GetContextPanel()); return; }
+            _LocalApplyControlsDefaults();
             _LocalHideMainMenuFriendsSidebar();
             _LocalHideNewPopular($.GetContextPanel());
             __ARMORY__
@@ -822,6 +823,24 @@ HUD_SMOKE_SYNC = """
         }
 """
 
+CONTROLS_DEFAULTS = """
+        function _LocalApplyControlsDefaults() {
+            const root = $.GetContextPanel();
+            if (root.__cs2gcControlsAttempted || GameInterfaceAPI.GetSettingString('ui_cs2gc_controls_v1') !== '0') return;
+            root.__cs2gcControlsAttempted = true;
+            const defaults = [['con_enable','1'], ['cl_teamid_overhead_mode','2'],
+                ['cl_teammate_colors_show','1'], ['cl_player_ping_mute','0']];
+            for (const [key, value] of defaults) GameInterfaceAPI.SetSettingString(key, value);
+            if (!defaults.every(([key,value]) => GameInterfaceAPI.GetSettingString(key) === value)) {
+                $.Msg('[CS2GC] Controls defaults did not read back; will retry on next launch.');
+                return;
+            }
+            GameInterfaceAPI.ConsoleCommand('host_writeconfig');
+            GameInterfaceAPI.SetSettingString('ui_cs2gc_controls_v1','1');
+            $.Msg('CS2GC_SETTING ui_cs2gc_controls_v1 1');
+        }
+"""
+
 WATCH_SETTINGS = """
     // cs2_gc: CS2-style slide toggle, styled inline after slider_toggle.css (the Watch page does not load it).
     const _cs2gcAnimBoot = GameInterfaceAPI.GetSettingString('ui_cs2gc_animations') === 'csgo';
@@ -1153,7 +1172,7 @@ def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
     let m_localMenuTimer = null;\n    let m_localMenuVisible = false;\n''' +
                           '    let m_localWhatsNewShown = false;\n    let m_localPartyUi = null;\n    let m_localPartyAccess = \'\';\n' +
                           ANCHOR + PARTIES_NAV + MAINMENU_BETA.replace('__WEBSITE_URL__', WEBSITE_URL) +
-                          DEFAULT_CT_PISTOL + HIDE_MAINMENU_FRIENDS + HUD_SMOKE_SYNC +
+                          DEFAULT_CT_PISTOL + HIDE_MAINMENU_FRIENDS + HUD_SMOKE_SYNC + CONTROLS_DEFAULTS +
                           HIDE_NEW_POPULAR +
                           (ARMORY_ONLY if hide_promo else "") +
                           MENU_REFRESH.replace('__ARMORY__', '_LocalKeepOnlyArmory();' if hide_promo else '') +
@@ -1218,13 +1237,16 @@ def prepare(directory, config):
     pet_id=pets.get('selected','0')
     from pathlib import Path
     import native_presentation
+    import native_compact_settings
     game = Path(directory).resolve().parents[1]
     icon=whats_new_icon(game)
     extra=native_presentation.assets(game)
+    extra.extend(native_compact_settings.assets(game, config))
     if icon: extra.append((WHATS_NEW_ICON, icon))
     menu=install_override(directory, enabled=True, folder='cs2_gc_mainmenu',
         comment='cs2_gc main-menu promotion', owner='cs2-gc-mainmenu-v1',
-        asset='panorama/scripts/mainmenu.vts_c', patch=lambda source: patch(source,bool(config['care_packages_enabled']),bool(config['hide_mainmenu_promo']),pet_id),
+        asset='panorama/scripts/mainmenu.vts_c', patch=lambda source: patch(native_compact_settings.menu_navigation(source),
+            bool(config['care_packages_enabled']),bool(config['hide_mainmenu_promo']),pet_id),
         extra=extra)
     food=install_override(directory, enabled=True, folder='cs2_gc_pet_food',
         comment='cs2_gc permanent companion food hint', owner='cs2-gc-pet-food-v1',

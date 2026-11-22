@@ -26,7 +26,7 @@ LIGHT_HELPERS = frozenset(name + '.py' for name in (
     'audit_next_collections', 'audit_collection_sources', 'package_collection_update', 'reset_profile',
     'care_package_bridge', 'package_care_update', 'launch_setup', 'package_release', 'bundled_bots',
     'native_newsettings', 'native_animations', 'native_default_music'))
-LIGHT_HELPERS |= {'native_beta_buy.py'}
+LIGHT_HELPERS |= {'native_beta_buy.py', 'native_compact_settings.py', 'whats_new.py'}
 # Not inputs of generation at all: the artwork cache only decides whether a texture is reused (same bytes either way)
 # and the CI failure reporter never runs during preparation. Format-1 caches still counted them as heavy.
 LIGHT_HELPERS |= {'artwork_cache.py', 'report_test_failures.py', 'finish_storage.py', 'native_presentation.py'}
@@ -79,6 +79,8 @@ class PreparationCache:
         for folder in ('collection_icons', 'weapon_patterns', 'cs2_gc_anime_agent_assets', 'cs2_gc_prime_karambit_assets'):
             files.update(p for p in (self.helpers / folder).rglob('*') if p.is_file())
         files.update(self.helpers.glob('*.png'))
+        if not heavy:
+            files.update((self.helpers / 'ui_assets').glob('*.png'))
         files.update(self.proxy / n for n in ('gold_pools.txt','cs2_gc_texture_decode.exe'))
         files.add(self.game / 'csgo/steam.inf')
         files.add(self.proxy / 'cs2_gc_replay/2501.bin')

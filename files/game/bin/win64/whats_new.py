@@ -3,8 +3,8 @@
 RELEASE must match data/mod_version.txt. Closing the window saves ui_cs2gc_whatsnew = SEEN_ID through the NEW
 settings bridge (native_newsettings.py), so it appears again only after the next update changes RELEASE.
 """
-RELEASE = '1.0.6'
-SEEN_ID = 'r1_0_6'
+RELEASE = '1.0.7'
+SEEN_ID = 'r1_0_7'
 DISPLAY_VERSION = 'V1.0'  # Patch releases share one player-facing bulletin.
 TITLE = "WHAT'S NEW IN CS-REBORN"
 SUBTITLE = DISPLAY_VERSION
@@ -18,6 +18,8 @@ SECTIONS = [
         ('NEW: PRIME Karambit', 'a standalone Karambit with its own inspect, draw and attack '
                                 'animations, a blade-down grip and a 3D preview. Buy it in the Armory for 30 stars, then equip it as '
                                 'your CT or T knife.'),
+        ('Settings', 'ordinary Settings now opens on Crosshair. Game has viewmodel sliders and a live radar preview. '
+                     'The separate NEW SETTINGS tab has its own tuning icon.'),
         ('Launch banner', 'Play shows a CS:REBORN loading banner while your game is being prepared.'),
         ('Black Market', 'the former Parties tab is now BLACK MARKET: six tall offers drawn at random for your '
                          'account and then fixed, so they never change. Click a card to reveal a rare '
