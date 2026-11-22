@@ -31,11 +31,12 @@ COBBLESTONE_VPKS = {
 
 
 def project_files(root):
+    from native_default_music import BUNDLE as music_bundle, bundle_files as music_files
     tools = root/'tools'
     result = []
     for path in sorted(tools.rglob('*')):
         relative = path.relative_to(tools)
-        if not path.is_file() or '__pycache__' in relative.parts:
+        if not path.is_file() or '__pycache__' in relative.parts or relative.parts[0] == music_bundle:
             continue
         if path.suffix.lower() not in ('.py','.png','.jpg','.cmd','.webm','.vpk'):
             continue
@@ -46,6 +47,7 @@ def project_files(root):
         if path.name in EXCLUDED_NAMES or 'cs2_gc_replay' in relative.parts:
             raise ValueError('Player or game data must never enter the release ZIP')
         result.append((path,BIN+relative.as_posix()))
+    result.extend((p, BIN + music_bundle + '/' + p.name) for p in music_files(tools / music_bundle))
     from native_agents import BUNDLE, MANIFEST, read_manifest
     bundle = tools / BUNDLE
     if read_manifest(bundle) is not None:

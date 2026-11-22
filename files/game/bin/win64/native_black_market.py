@@ -138,6 +138,16 @@ BLACK_MARKET = r"""
                     return value;
                 };
                 const wearName = stat('WEAR'), wearFloat = stat('FLOAT'), pattern = stat('PATTERN');
+                const inspect = _LocalPartyButton(front,'cs2gc-market-inspect-' + slot,'INSPECT',() => {
+                    const data = cards[slot].data;
+                    if (!data || !data.revealed || screen.__closing || owner !== String(MyPersonaAPI.GetXuid())) return;
+                    const owned = String(data.purchased);
+                    const id = data.purchased && Number(InventoryAPI.GetItemDefinitionIndex(owned)) === data.def
+                        ? owned : InventoryAPI.GetFauxItemIDFromDefAndPaintIndex(data.def,data.paint);
+                    UiToolkitAPI.ShowCustomLayoutPopup('', 'file://{resources}/layout/popups/popup_inventory_inspect.xml')
+                        .Data().oSettings = {item_id:id, inspect_only:true, hide_all_action_items:true, hide_item_cert:true};
+                });
+                Object.assign(inspect.style,{width:'100%',marginRight:'0px',marginTop:'6px'});
                 const buy = _LocalPartyButton(front,'cs2gc-market-buy-' + slot,'30 STARS',() => {
                     const data = cards[slot].data;
                     if (data && data.revealed && !data.purchased && buy.enabled) request(data.token,2);

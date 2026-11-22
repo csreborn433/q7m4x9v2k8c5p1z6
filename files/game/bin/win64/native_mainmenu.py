@@ -132,34 +132,6 @@ HIDE_NEW_POPULAR = """
             });
         }
 """
-HIDE_CLIENT_UPDATE_BUTTON = """
-        // The stock client sometimes shows a yellow "Your client needs to update" button in the main
-        // menu; hide it entirely because the offline mod keeps its own armory flow.
-        function _LocalHideClientUpdate(parent) {
-            if (!parent || !parent.Children) return;
-            const pattern = /(your\\s+client\\s+needs\\s+to\\s+update|client\\s+needs\\s+to\\s+update|needs\\s+to\\s+update)/i;
-            const hide = node => {
-                if (!node) return;
-                const text = String(node.text || '');
-                const id = String(node.id || '');
-                if (pattern.test(text) || pattern.test(id)) {
-                    node.visible = false;
-                    node.style.visibility = 'collapse';
-                    node.SetHasClass && node.SetHasClass('hidden', true);
-                    const section = node.GetParent ? node.GetParent() : null;
-                    if (section && section !== $.GetContextPanel()) {
-                        section.visible = false;
-                        section.style.visibility = 'collapse';
-                        section.SetHasClass && section.SetHasClass('hidden', true);
-                    }
-                }
-            };
-            parent.Children().forEach(child => {
-                hide(child);
-                _LocalHideClientUpdate(child);
-            });
-        }
-"""
 ARMORY_ONLY = """
         // Keep the beta label and Armory tile in the left column.
         function _LocalCollapse(panel) {
@@ -198,7 +170,6 @@ MENU_REFRESH = """
             if (!m_localMenuVisible || _LocalInMatch()) { _LocalHideRecentPulls($.GetContextPanel()); return; }
             _LocalHideMainMenuFriendsSidebar();
             _LocalHideNewPopular($.GetContextPanel());
-            _LocalHideClientUpdate($.GetContextPanel());
             __ARMORY__
             const marketTab = partyNav && partyNav.checked && _cs2gcPartyMenu.FindChildTraverse('cs2gc-party-tab');
             if (marketTab) _LocalShowBlackMarket(marketTab);
@@ -854,8 +825,10 @@ HUD_SMOKE_SYNC = """
 WATCH_SETTINGS = """
     // cs2_gc: CS2-style slide toggle, styled inline after slider_toggle.css (the Watch page does not load it).
     const _cs2gcAnimBoot = GameInterfaceAPI.GetSettingString('ui_cs2gc_animations') === 'csgo';
+    const _cs2gcBuyBoot = GameInterfaceAPI.GetSettingString('ui_cs2gc_buymenu') === 'beta';
     const _cs2gcGraphicsBoot = GameInterfaceAPI.GetSettingString('ui_low_end_pc') === '1';
-    function _LocalSettingsToggle(parent, id, titleText, description, setting, bootValue, initialValue, liveStatus = null) {
+    function _LocalSettingsToggle(parent, id, titleText, description, setting, bootValue, initialValue, liveStatus = null,
+                                  values = ['1','0'], bootStatus = ['Low-end graphics active','Default graphics active']) {
         const row = $.CreatePanel('Button', parent, id);
         Object.assign(row.style, {flowChildren:'right', width:'100%', margin:'0px',
             padding:'16px 20px', backgroundColor:'rgba(0,0,0,0.35)', borderRadius:'4px'});
@@ -880,14 +853,14 @@ WATCH_SETTINGS = """
             pill.style.border = on ? '2px solid #147717' : '2px solid rgba(255,255,255,0.18)';
             knob.style.transform = on ? 'translateX(22px)' : 'translateX(0px)';
             status.text = liveStatus ? liveStatus[on ? 0 : 1] :
-                on === bootValue ? (on ? 'Low-end graphics active' : 'Default graphics active') : 'Restart CS2 to apply';
+                on === bootValue ? bootStatus[on ? 0 : 1] : 'Restart CS2 to apply';
             status.style.color = liveStatus || on === bootValue ? '#7ec27f' : '#e8c15a';
         };
         let on = initialValue;
         show(on);
         row.SetPanelEvent('onactivate', () => {
             on = !on;
-            const value = on ? '1' : '0';
+            const value = values[on ? 0 : 1];
             GameInterfaceAPI.SetSettingString(setting, value);
             $.Msg('CS2GC_SETTING ' + setting + ' ' + value);
             show(on);
@@ -1061,6 +1034,10 @@ WATCH_SETTINGS = """
             graphicsHeading.AddClass('stratum-regular-condensed');
             Object.assign(graphicsHeading.style, {fontSize:'24px', color:'white', marginBottom:'12px'});
             _LocalAnimationToggle(gameplay);
+            _LocalSettingsToggle(gameplay, 'CS2GCBetaBuyToggle', 'BETA BUY HUD',
+                'Arrange your current loadout around a dial. Buy, refund and number keys use the standard CS2 controls. Restart CS2 to apply.',
+                'ui_cs2gc_buymenu', _cs2gcBuyBoot, GameInterfaceAPI.GetSettingString('ui_cs2gc_buymenu') === 'beta',
+                null, ['beta','cs2'], ['Beta buy HUD selected','Stock CS2 buy HUD selected']);
             _LocalHudColourMenu(gameplay);
             _LocalSettingsToggle(graphics, 'CS2GCLowEndGraphicsToggle', 'ENABLE LOW END PC GRAPHICS',
                 'Reduces particles, fog, microshadows, smoke shadows, distant props, textures and old ragdolls. Restart CS2 to apply.',
@@ -1138,14 +1115,21 @@ VANITY_FOCUS = """        // cs2_gc: the scenery entry is gone, so the first rem
 
 
 def patch_vanity_menu(source):
-    """Drop the main-menu scenery entry; the item-inspect scenery picker (inspect-map=true) is untouched."""
-    if source.count(VANITY_MAP_ITEM) != 1 or source.count(VANITY_FOCUS_ANCHOR) != 1 or 'cs2_gc:' in source:
+    maps = 'let aMaps = cvarInfo.allowed_values;'
+    if any(source.count(anchor) != 1 for anchor in (maps, VANITY_MAP_ITEM, VANITY_FOCUS_ANCHOR)) or 'cs2_gc:' in source:
         raise ValueError('Installed vanity context menu changed; no patch written')
-    source = source.replace(VANITY_MAP_ITEM, '', 1)
+    source = source.replace(VANITY_MAP_ITEM, '', 1).replace(maps, "let aMaps = ['warehouse'];")
     return source.replace(VANITY_FOCUS_ANCHOR, VANITY_FOCUS + VANITY_FOCUS_ANCHOR, 1)
 
 
 def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
+    # Omit just the stock alert at its producer; its icon has no text and shares a parent with other alerts.
+    update = re.compile(r'        if \(NewsAPI\.IsNewClientAvailable\(\)\) \{\n'
+                        r'(?:(?!\n        \}).)*?notification\.icon = "client_update";'
+                        r'(?:(?!\n        \}).)*?\n        \}\n', re.S)
+    source, count = update.subn('', source)
+    if count != 1:
+        raise ValueError('Installed client-update alert changed; no patch written')
     store = "NavigateToTab('JsMainMenuStore', 'mainmenu_store_fullscreen', openToSection !== '' ? openToSection : 'id-store-nav-coupon');"
     store_replacement = "NavigateToTab('JsMainMenuStore', 'mainmenu_store_fullscreen', 'id-store-nav-xpshop');"
     mission = "$('#id-pausemenu-mission-panel').SetHasClass('hide-non-prime', MyPersonaAPI.GetElevatedState() != 'elevated');"
@@ -1170,7 +1154,7 @@ def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
                           '    let m_localWhatsNewShown = false;\n    let m_localPartyUi = null;\n    let m_localPartyAccess = \'\';\n' +
                           ANCHOR + PARTIES_NAV + MAINMENU_BETA.replace('__WEBSITE_URL__', WEBSITE_URL) +
                           DEFAULT_CT_PISTOL + HIDE_MAINMENU_FRIENDS + HUD_SMOKE_SYNC +
-                          HIDE_NEW_POPULAR + HIDE_CLIENT_UPDATE_BUTTON +
+                          HIDE_NEW_POPULAR +
                           (ARMORY_ONLY if hide_promo else "") +
                           MENU_REFRESH.replace('__ARMORY__', '_LocalKeepOnlyArmory();' if hide_promo else '') +
                           whats_new_script() + PARTIES + SOCIAL_MENU + BLACK_MARKET +
@@ -1233,11 +1217,15 @@ def prepare(directory, config):
     pets=snapshot(directory)
     pet_id=pets.get('selected','0')
     from pathlib import Path
-    icon=whats_new_icon(Path(directory).resolve().parents[1])
+    import native_presentation
+    game = Path(directory).resolve().parents[1]
+    icon=whats_new_icon(game)
+    extra=native_presentation.assets(game)
+    if icon: extra.append((WHATS_NEW_ICON, icon))
     menu=install_override(directory, enabled=True, folder='cs2_gc_mainmenu',
         comment='cs2_gc main-menu promotion', owner='cs2-gc-mainmenu-v1',
         asset='panorama/scripts/mainmenu.vts_c', patch=lambda source: patch(source,bool(config['care_packages_enabled']),bool(config['hide_mainmenu_promo']),pet_id),
-        extra=[(WHATS_NEW_ICON, icon)] if icon else ())
+        extra=extra)
     food=install_override(directory, enabled=True, folder='cs2_gc_pet_food',
         comment='cs2_gc permanent companion food hint', owner='cs2-gc-pet-food-v1',
         asset='panorama/scripts/vanity_pet_info.vts_c',

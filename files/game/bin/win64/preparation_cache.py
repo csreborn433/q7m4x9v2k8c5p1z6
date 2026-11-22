@@ -25,10 +25,11 @@ LIGHT_HELPERS = frozenset(name + '.py' for name in (
     'extract_finish_materials', 'extract_gc_protocol', 'inspect_cs2', 'make_collection_icons',
     'audit_next_collections', 'audit_collection_sources', 'package_collection_update', 'reset_profile',
     'care_package_bridge', 'package_care_update', 'launch_setup', 'package_release', 'bundled_bots',
-    'native_newsettings', 'native_animations'))
+    'native_newsettings', 'native_animations', 'native_default_music'))
+LIGHT_HELPERS |= {'native_beta_buy.py'}
 # Not inputs of generation at all: the artwork cache only decides whether a texture is reused (same bytes either way)
 # and the CI failure reporter never runs during preparation. Format-1 caches still counted them as heavy.
-LIGHT_HELPERS |= {'artwork_cache.py', 'report_test_failures.py', 'finish_storage.py'}
+LIGHT_HELPERS |= {'artwork_cache.py', 'report_test_failures.py', 'finish_storage.py', 'native_presentation.py'}
 LEGACY_LIGHT = LIGHT_HELPERS - {'artwork_cache.py', 'report_test_failures.py', 'finish_storage.py'}
 # Format-1 heavy fingerprints were taken before these files existed or changed; the released ZIPs carry CRLF copies.
 LEGACY_NEW_FILES = {'finish_storage.py'}

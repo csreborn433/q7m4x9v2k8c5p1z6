@@ -22,6 +22,7 @@ from native_care_packages import prepare as care_packages
 from native_mainmenu import prepare as mainmenu
 from native_store_nav import prepare as store_nav
 from music_store import prepare as music_store
+from native_default_music import prepare as default_music
 from native_knife_reel import prepare as knife_reel
 from native_stats import prepare as party_page
 from combat_events import prepare as combat_tracking
@@ -106,6 +107,7 @@ def prepare(directory, force_rebuild=False):
     print('Intro movie: ' + intro_movie(directory, source=Path(__file__).resolve().parent/'cs2_gc_intro_assets'), flush=True)
     print('Chicken Cosmetics: ' + chicken_cosmetics(directory,config),flush=True)
     print('Music-kit Store: ' + music_store(directory,config),flush=True)
+    print('Default music kit: ' + default_music(directory), flush=True)
     print('Glove palettes: ' + glove_palettes(directory,config),flush=True)
     actions = [('Armory', armory), ('Scoreboard', scoreboard), ('Store', store),
                          ('Opening confirmation', confirmation), ('Item sales', sales), ('Multi-sell', multi_sell),

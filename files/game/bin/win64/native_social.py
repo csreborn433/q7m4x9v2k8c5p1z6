@@ -174,7 +174,8 @@ SOCIAL_MENU = r"""
                     Object.assign(text.style,{width:'fill-parent-flow(1)',flowChildren:'down'});
                     const colors = ['#a7b1b9','#b0c3d9','#5e98d9','#8090ff','#b580ff','#e68aea','#ff7777','#e4ae39','#d7bc68'];
                     _LocalWhatsNewLabel(text,name,'stratum-bold',15,colors[Number(rarity)] || colors[0]);
-                    _LocalWhatsNewLabel(text,(+source?'Armory':'Container') + (+paint?'  ·  Float '+wear+'  ·  Seed '+seed:''),
+                    if (+paint) _LocalWhatsNewLabel(text,'Float '+wear,'stratum-regular',13,'#e6d1c9');
+                    _LocalWhatsNewLabel(text,(+source?'Armory':'Container') + (+paint?'  ·  Seed '+seed:''),
                         'stratum-regular',13,'#b4bec8');
                     shown++;
                 });

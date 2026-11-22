@@ -1,12 +1,11 @@
-"""Disable the removed NEW tab and manage the optional original CS2 buy-wheel override."""
+"""Persist NEW choices and prepare opt-in native UI/animation overrides."""
 from pathlib import Path
-import hashlib
 import json
-import os
 import re
 import struct
 
 from native_resources import console_log_path, install_override, mount_gameinfo, read_text
+from native_beta_buy import prepare as prepare_beta_buy
 from native_tradeups import atomic_write
 from whats_new import SEEN_ID as WHATS_NEW_SEEN
 
@@ -38,7 +37,6 @@ PREVIOUS_KEYS = tuple(key for key in DEFAULTS if key != 'ui_cs2gc_smoke')
 WHEEL_FOLDER = 'cs2_gc_buymenu_wheel'
 WHEEL_COMMENT = 'cs2_gc original buy wheel'
 WHEEL_OWNER = 'cs2-gc-original-buy-wheel-v1'
-WHEEL_ASSETS = ('panorama/layout/buymenu.vxml_c', 'panorama/styles/buymenu.vcss_c', 'panorama/scripts/buymenu.vjs_c')
 
 # ---------------------------------------------------------------- settings menu
 TABINFO_ANCHOR = '        CrosshairSettings: {'
@@ -84,11 +82,11 @@ SETTINGS_SCRIPT = r'''
             ['OFF',!lowOn,()=>{_CS2GCSetting('ui_low_end_pc','0');_CS2GCApplyLowEnd(false);_CS2GCBuildNewSettings(panel);}],
             ['ON',lowOn,()=>{_CS2GCSetting('ui_low_end_pc','1');_CS2GCApplyLowEnd(true);_CS2GCBuildNewSettings(panel);}]
         ]);
-        const csgo=GameInterfaceAPI.GetSettingString('ui_cs2gc_buymenu')==='csgo';
-        _CS2GCSection(content,'SELECT BUY MENU UI','Choose the current CS2 menu or the original CS2 launch-era radial buy wheel. Restart CS2 to apply the choice.');
+        const beta=GameInterfaceAPI.GetSettingString('ui_cs2gc_buymenu')==='beta';
+        _CS2GCSection(content,'SELECT BUY MENU UI','Choose the current CS2 menu or the beta-inspired buy HUD. Restart CS2 to apply the choice.');
         _CS2GCChoiceRow(content,[
-            ['CS2',!csgo,()=>{_CS2GCSetting('ui_cs2gc_buymenu','cs2');_CS2GCBuildNewSettings(panel);}],
-            ['CSGO',csgo,()=>{_CS2GCSetting('ui_cs2gc_buymenu','csgo');_CS2GCBuildNewSettings(panel);}]
+            ['CS2',!beta,()=>{_CS2GCSetting('ui_cs2gc_buymenu','cs2');_CS2GCBuildNewSettings(panel);}],
+            ['BETA',beta,()=>{_CS2GCSetting('ui_cs2gc_buymenu','beta');_CS2GCBuildNewSettings(panel);}]
         ]);
     }
     function _CS2GCEnsureNewTab(){
@@ -149,66 +147,7 @@ def patch_settings(source):
     return source
 
 
-def wheel_source_root(proxy_directory):
-    """The radial wheel ships in the same early-CS2 build as the CS:GO animations, so both use one folder."""
-    configured = os.environ.get('CS2GC_BUY_WHEEL_SOURCE')
-    if configured:
-        return Path(configured).expanduser()
-    import native_animations
-    return native_animations.source_root(proxy_directory)
-
-
-# ItemPreviewPanel was removed from the client after the Limited Test; the old layout only uses it for a hidden
-# placeholder, and an unknown panel type is a fatal layout error.
-WHEEL_PANEL_TYPES = {'ItemPreviewPanel': 'Panel'}
-
-
-def adapt_wheel_layout(data):
-    """Rewrite the Limited Test buymenu layout so the current client can parse it.
-
-    Its compiled tree (LaCo, binary KV3) names includes with a `_c` suffix and uses panel types that no longer
-    exist; current layouts reference `.vcss`/`.vts`/`.vjs` and the loader appends `_c` itself."""
-    from kv3 import OBJECT, read_kv3, read_resource, write_kv3, write_resource
-    version, blocks = read_resource(data)
-    layouts = [block for block in blocks if block[0] == 'LaCo']
-    if len(layouts) != 1:
-        raise ValueError('Compiled buy-wheel layout has no single LaCo layout tree')
-    guid, root = read_kv3(layouts[0][1])
-
-    def walk(node):
-        if node.type == OBJECT:
-            fields = dict(node.value)
-            kind, name = fields.get('eType'), fields.get('name')
-            if kind is not None and name is not None:
-                if kind.value == 'PANEL' and name.value in WHEEL_PANEL_TYPES:
-                    name.value = WHEEL_PANEL_TYPES[name.value]
-                elif kind.value == 'REFERENCE_COMPILED' and name.value.endswith('_c'):
-                    name.value = name.value[:-2]
-            for _, child in node.value:
-                walk(child)
-        elif isinstance(node.value, list):
-            for child in node.value:
-                walk(child)
-
-    walk(root)
-    layouts[0][1] = write_kv3(guid, root)
-    return write_resource(version, blocks)
-
-
-def _validate_wheel_resource(relative, data):
-    if len(data) < 16 or len(data) > 8 * 1024 * 1024:
-        raise ValueError('Invalid compiled buy-wheel resource size: ' + relative)
-    size, header, version, offset, count = struct.unpack_from('<IHHII', data)
-    if size != len(data) or header != 12 or version != 3 or not 1 <= count <= 32:
-        raise ValueError('Unsupported compiled buy-wheel resource: ' + relative)
-    if relative.endswith('.vcss_c'):
-        if b'buywheel' not in data.lower() or b'radial-selector' not in data.lower():
-            raise ValueError('Compiled stylesheet does not contain the original radial buy-wheel styles')
-    elif b'BuyMenu' not in data:
-        raise ValueError('Compiled layout does not contain the native BuyMenu panel')
-
-
-def install_wheel_override(proxy_directory, *, enabled, source_root=None):
+def disable_legacy_wheel(proxy_directory):
     proxy = Path(proxy_directory).resolve()
     game = proxy.parent.parent
     info = game / 'csgo/gameinfo.gi'
@@ -225,53 +164,12 @@ def install_wheel_override(proxy_directory, *, enabled, source_root=None):
         raise ValueError('Buy-wheel folder contains unowned files')
 
     current = read_text(info)
-    if not enabled:
-        if not previous:
-            return 'disabled; current CS2 menu selected'
-        mounted = mount_gameinfo(current, False, WHEEL_FOLDER, WHEEL_COMMENT)
-        if mounted != current:
-            atomic_write(info, mounted)
-            return 'disabled; restart CS2 to load the current menu'
-        return 'disabled; current CS2 menu selected'
-
-    source_root = Path(source_root) if source_root is not None else wheel_source_root(proxy)
-    assets = []
-    hashes = {}
-    for relative in WHEEL_ASSETS:
-        path = source_root / Path(relative)
-        if not path.is_file():
-            raise FileNotFoundError('Original buy-wheel resource is missing: ' + str(path))
-        data = path.read_bytes()
-        _validate_wheel_resource(relative, data)
-        hashes[relative] = hashlib.sha256(data).hexdigest()
-        if relative.endswith('.vxml_c'):
-            data = adapt_wheel_layout(data)
-        assets.append((relative, data))
-
-    if previous:
-        expected = previous.get('outputs_sha256', {})
-        for path in mod.glob('pak01_*.vpk'):
-            if expected.get(path.name) != hashlib.sha256(path.read_bytes()).hexdigest():
-                raise ValueError('Buy-wheel VPK was edited externally; leaving it unchanged')
-
-    mod.mkdir(parents=True, exist_ok=True)
-    from vpk_pack import pack
-    pack(mod, extra=assets)
-    outputs = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in mod.glob('pak01_*.vpk')}
-    atomic_write(manifest_path, json.dumps({
-        'owner': WHEEL_OWNER,
-        'assets_sha256': hashes,
-        'outputs_sha256': outputs
-    }, indent=2) + '\n')
-    mounted = mount_gameinfo(current, True, WHEEL_FOLDER, WHEEL_COMMENT)
+    if not previous:
+        return 'disabled'
+    mounted = mount_gameinfo(current, False, WHEEL_FOLDER, WHEEL_COMMENT)
     if mounted != current:
-        backup = info.with_name(info.name + '.' + WHEEL_FOLDER + '_backup')
-        if not backup.exists():
-            with backup.open('x', encoding='utf-8', newline='') as output:
-                output.write(current)
         atomic_write(info, mounted)
-        return 'prepared from supplied wheel resources; restart CS2 to load the buy wheel'
-    return 'installed; restart CS2 if it is currently running'
+    return 'disabled'
 
 
 def prepare(directory, config):
@@ -283,12 +181,12 @@ def prepare(directory, config):
                                   asset='panorama/scripts/hud/hudmoney.vts_c', patch=lambda source: source)
     game = Path(directory).resolve().parents[1]
     values = read_settings(game / 'csgo/cfg')
-    # The Limited Test radial wheel's layout loads, but the current client's CSGOBuyMenu code only drives the grid
-    # and stops CS2 with a fatal error when the grid panels (e.g. promo-item) are missing. Keep it unmounted.
-    wheel = install_wheel_override(directory, enabled=False)
+    # The incompatible Limited Test wheel always stays unmounted, even when beta styling is selected.
+    wheel = disable_legacy_wheel(directory)
+    beta_buy = prepare_beta_buy(directory, values)
     animations = prepare_animations(directory, values)
     return 'settings: ' + settings + '; custom menu: ' + legacy_hud + '; original wheel: ' + wheel + \
-        '; CS:GO animations: ' + animations
+        '; beta buy HUD: ' + beta_buy + '; CS:GO animations: ' + animations
 
 
 def prepare_animations(directory, values):
@@ -307,7 +205,7 @@ def prepare_animations(directory, values):
 # ---------------------------------------------------------------- persistence
 SETTINGS_CFG = 'cs2_gc_newsettings.cfg'
 # ui_cs2gc_whatsnew only accepts this release's id: an older id is dropped, so the window shows after an update.
-ALLOWED = {'ui_low_end_pc': ('0', '1'), 'ui_cs2gc_buymenu': ('cs2', 'csgo'), 'ui_cs2gc_animations': ('cs2', 'csgo'),
+ALLOWED = {'ui_low_end_pc': ('0', '1'), 'ui_cs2gc_buymenu': ('cs2', 'csgo', 'beta'), 'ui_cs2gc_animations': ('cs2', 'csgo'),
            'ui_cs2gc_whatsnew': ('0', WHATS_NEW_SEEN), 'ui_cs2gc_smoke': ('0', '1')}
 LEGACY_KEYS = ('ui_cs2gc_buymenu', 'ui_low_end_pc')  # the only keys files from before the animation toggle hold
 LINE = re.compile(rb'CS2GC_SETTING (' + b'|'.join(re.escape(key.encode()) for key in sorted(ALLOWED)) + rb') (\w+)')
