@@ -3,15 +3,15 @@
   "name": "weapon_knife_cs2gc_prime_karambit",
   "definition": "57007",
   "files": {
-    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/draw.vnmclip_c": "3c54879a4c0538954ebb7b8a587bc7562e68dc6821c33224a85f976edadcd12d",
-    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/idle.vnmclip_c": "f91c70fe37cc1c62903cc175e5a691c4bc1624341d57dce727cfd3da1b6478a8",
-    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/inspect_1.vnmclip_c": "1445f7eebc0b98e40a95b56506d3dab5cb18945e055f16825da1bfb67de39aa9",
-    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/midslash1.vnmclip_c": "52a7ee92193a4ebd9e383a4a0d6967e41a11007c69942f0178188d8ab769cbae",
-    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/midslash2.vnmclip_c": "e3f1a48fa9c0c025c3d61459e348c46a9781ecc65454d81c43e7e24f7a5bb745",
-    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/slash1.vnmclip_c": "d04b487494904ae67075933872c656da1ae2a8b1a9a623eed9e98462ebe568f6",
-    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/slash2.vnmclip_c": "721cf376658bab07b4b5606e7c232966d5b29079f5b08ed259fbf1f7f6f6ce17",
-    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/stab.vnmclip_c": "72f4c10120a45b54f773f27284b4b23c7bf60ae646a685b7cb13622768b9fa71",
-    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/stab_miss.vnmclip_c": "49f775031d4b83fa43cbea944f504649cc6a856766cbe480f7c27d1ee90d8d1a",
+    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/draw.vnmclip_c": "6c6723648a6dfb320cf782a0fb2c223fe3e87053ce4683cd3f62046c18e606bc",
+    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/idle.vnmclip_c": "87d0118a218fd63a7daa4543d5ec4710dc232a62af1c5a7681798e294ddf18e2",
+    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/inspect_1.vnmclip_c": "5f553f3ece4bdc137fd793607e5f4c5bbb8129e298174abb6d79acb04359ae5d",
+    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/midslash1.vnmclip_c": "1873fb8c8fc70b351c2f4ee4e3fb4874817880e093005b589bd7eca547be8710",
+    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/midslash2.vnmclip_c": "cc47bab53c6f25127b2ac658e048779853600fd9c77ba8ed59382e403ad62371",
+    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/slash1.vnmclip_c": "97698bcd14721afc0bddf40c0df304e700d6e8b4f70fe2464600f2496967686f",
+    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/slash2.vnmclip_c": "d68181667b03c082468297e993b98f26ce79aff69afd770317de2509a7fff27c",
+    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/stab.vnmclip_c": "70680789624c13581f623aa5cdcb28465563000ea443d2e9c610ea17f6287337",
+    "animation/anims/viewmodel/knife/cs2gc_prime_karambit/stab_miss.vnmclip_c": "acc2965a1cc796ee39f1a9ecb3512e5ea1bc85da68802a5bb714a778550da819",
     "animation/graphs/viewmodel/viewmodel_knife_cs2gc_prime_karambit.vnmgraph_c": "0db6a76f8e6b7131efd763deb33ad4c93f9b99edee5c18276c9e7fb41acfcfc9",
     "animation/skeletons/cs2gc_prime_karambit/prime_karambit.vnmskel_c": "099c52da51523fb65c528b3b88a2548cc7ab7ddc1db95817660bff9ae1f278b3",
     "cs2gc_prime_karambit_dependencies.vrman_c": "65fdb66c6a07e7019a4cbcb17c816b3eaf7f8c0a1b976beb168ce594469d5ab5",
@@ -36,8 +36,8 @@
     "sounds/cs2gc_prime_karambit/inspect_mvt_d.vsnd_c": "75945754d68e67e1d8aa0d436ec0a6f2943c6acf166ab54aa46633c1a0e2a73b"
   },
   "packs": {
-    "pak01_dir.vpk": "f7dbcea7be1bcd9ac0d0d5fad26d902ae65a85b7399662e902cd7a9216eb33c2",
-    "pak01_000.vpk": "e37e485f7689896cb9024223cccff8883751310f0978bcbc9cb2a8663f6ee200"
+    "pak01_dir.vpk": "9bfb93446c2c110febeccfc9db2830d5fc7b28bc84512ce71f97586190df75d9",
+    "pak01_000.vpk": "d7d83d0e6373fa5408bf7934df107e4cfd75a1b51387f8402848d81206f78f06"
   },
   "animation_validation": {
     "source_scale": 0.39370078740157477,
@@ -52,6 +52,12 @@
       -0.531561,
       -0.488657,
       0.616287
+    ],
+    "grip_roll": [
+      0.0,
+      1.0,
+      0.0,
+      0.0
     ],
     "fps": 60,
     "alignment": [
@@ -116,9 +122,9 @@
           "hand_R",
           "wpn"
         ],
-        "max_position_error": 2.6139223207395995e-05,
-        "max_quaternion_error": 3.644862189844389e-13,
-        "sha256": "f91c70fe37cc1c62903cc175e5a691c4bc1624341d57dce727cfd3da1b6478a8"
+        "max_position_error": 2.584220197477869e-05,
+        "max_quaternion_error": 4.1744385725905886e-13,
+        "sha256": "87d0118a218fd63a7daa4543d5ec4710dc232a62af1c5a7681798e294ddf18e2"
       },
       "draw": {
         "frames": 135,
@@ -168,9 +174,9 @@
           "hand_R",
           "wpn"
         ],
-        "max_position_error": 0.0003635402151988109,
-        "max_quaternion_error": 9.728242655882013e-10,
-        "sha256": "3c54879a4c0538954ebb7b8a587bc7562e68dc6821c33224a85f976edadcd12d"
+        "max_position_error": 0.00035912099148597415,
+        "max_quaternion_error": 9.728243766105038e-10,
+        "sha256": "6c6723648a6dfb320cf782a0fb2c223fe3e87053ce4683cd3f62046c18e606bc"
       },
       "inspect_1": {
         "frames": 263,
@@ -220,9 +226,9 @@
           "hand_R",
           "wpn"
         ],
-        "max_position_error": 0.0007732266780275165,
+        "max_position_error": 0.0007630312846830749,
         "max_quaternion_error": 1.2935517101908545e-09,
-        "sha256": "1445f7eebc0b98e40a95b56506d3dab5cb18945e055f16825da1bfb67de39aa9"
+        "sha256": "5f553f3ece4bdc137fd793607e5f4c5bbb8129e298174abb6d79acb04359ae5d"
       },
       "slash1": {
         "frames": 116,
@@ -273,8 +279,8 @@
           "wpn"
         ],
         "max_position_error": 0.00026468413668210086,
-        "max_quaternion_error": 1.1876921668374507e-09,
-        "sha256": "d04b487494904ae67075933872c656da1ae2a8b1a9a623eed9e98462ebe568f6"
+        "max_quaternion_error": 1.1876922778597532e-09,
+        "sha256": "97698bcd14721afc0bddf40c0df304e700d6e8b4f70fe2464600f2496967686f"
       },
       "slash2": {
         "frames": 116,
@@ -324,9 +330,9 @@
           "hand_R",
           "wpn"
         ],
-        "max_position_error": 0.0007760453471277184,
-        "max_quaternion_error": 1.1308001202081641e-09,
-        "sha256": "721cf376658bab07b4b5606e7c232966d5b29079f5b08ed259fbf1f7f6f6ce17"
+        "max_position_error": 0.0007788472885405743,
+        "max_quaternion_error": 1.1316823034235313e-09,
+        "sha256": "d68181667b03c082468297e993b98f26ce79aff69afd770317de2509a7fff27c"
       },
       "midslash1": {
         "frames": 116,
@@ -377,8 +383,8 @@
           "wpn"
         ],
         "max_position_error": 0.00026468413668210086,
-        "max_quaternion_error": 1.1876921668374507e-09,
-        "sha256": "52a7ee92193a4ebd9e383a4a0d6967e41a11007c69942f0178188d8ab769cbae"
+        "max_quaternion_error": 1.1876922778597532e-09,
+        "sha256": "1873fb8c8fc70b351c2f4ee4e3fb4874817880e093005b589bd7eca547be8710"
       },
       "midslash2": {
         "frames": 116,
@@ -428,9 +434,9 @@
           "hand_R",
           "wpn"
         ],
-        "max_position_error": 0.0007760453471277184,
-        "max_quaternion_error": 1.1308001202081641e-09,
-        "sha256": "e3f1a48fa9c0c025c3d61459e348c46a9781ecc65454d81c43e7e24f7a5bb745"
+        "max_position_error": 0.0007788472885405743,
+        "max_quaternion_error": 1.1316823034235313e-09,
+        "sha256": "cc47bab53c6f25127b2ac658e048779853600fd9c77ba8ed59382e403ad62371"
       },
       "stab": {
         "frames": 116,
@@ -480,9 +486,9 @@
           "hand_R",
           "wpn"
         ],
-        "max_position_error": 0.00021145150626258885,
-        "max_quaternion_error": 1.1112845088590007e-09,
-        "sha256": "72f4c10120a45b54f773f27284b4b23c7bf60ae646a685b7cb13622768b9fa71"
+        "max_position_error": 0.00021192007867956077,
+        "max_quaternion_error": 1.1112846198813031e-09,
+        "sha256": "70680789624c13581f623aa5cdcb28465563000ea443d2e9c610ea17f6287337"
       },
       "stab_miss": {
         "frames": 114,
@@ -532,9 +538,9 @@
           "hand_R",
           "wpn"
         ],
-        "max_position_error": 0.00036893524158981616,
-        "max_quaternion_error": 1.3967899059608158e-09,
-        "sha256": "49f775031d4b83fa43cbea944f504649cc6a856766cbe480f7c27d1ee90d8d1a"
+        "max_position_error": 0.0003662271273986373,
+        "max_quaternion_error": 1.3967900169831182e-09,
+        "sha256": "acc2965a1cc796ee39f1a9ecb3512e5ea1bc85da68802a5bb714a778550da819"
       }
     }
   }

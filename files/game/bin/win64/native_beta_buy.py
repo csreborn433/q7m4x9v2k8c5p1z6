@@ -1,8 +1,7 @@
-"""Build an original radial buy board from the supported client's own layout.
+"""Build a two-level buy wheel around the supported client's own controls.
 
-No substitute buttons: each spoke contains its real category, including its
-loadout, keyboard selection and native buy/donate/refund handlers. The promo
-slot occupies the hub. Preparation needs no Limited Test files.
+Only navigation buttons are created. Item spokes use the player's real loadout
+and native buy/donate/refund handlers. Preparation needs no Limited Test files.
 """
 import hashlib
 from pathlib import Path
@@ -16,8 +15,65 @@ FOLDER = 'cs2_gc_beta_buy'
 # Compiled layout of client 2000933. Never guess the native control contract.
 LAYOUT_SHA256 = '57260ee09bf092a96270b3384bf615bf46611076cebcef24f11235cf40069623'
 
-# Clockwise from twelve o'clock, in the same order as the native number keys.
-SPOKES = ((337, 4), (658, 72), (594, 312), (80, 312), (16, 72))
+WHEEL_ONLOAD = """(function () {
+    const root = $.GetContextPanel();
+    if (root.__cs2gcWheelHome) { root.__cs2gcWheelHome(); return; }
+    const cats = [1,2,3,4,5].map(n => root.FindChildTraverse('CategoryContainer' + n));
+    const promo = root.FindChildTraverse('CategoryContainerPromo');
+    if (cats.some(c => !c) || !promo) { $.Msg('[CS2GC] Buy wheel missing categories; keeping native controls'); return; }
+    const body = promo.GetParent(), names = ['Equipment','Pistols','Mid-Tier','Rifles','Grenades'];
+    body.style.flowChildren = 'none';
+    function spoke(i, count) {
+        const angle = i * 2 * Math.PI / count - Math.PI / 2;
+        return Math.round(352 + Math.cos(angle)*298) + 'px ' + Math.round(237 + Math.sin(angle)*178) + 'px 0px';
+    }
+    function button(id, title, position, click) {
+        const btn = $.CreatePanel('Button', body, id);
+        Object.assign(btn.style, {position:position, width:'240px', height:'64px',
+            backgroundColor:'#25333ef5', border:'2px solid #ada078', borderRadius:'28px'});
+        const label = $.CreatePanel('Label', btn, '', {text:title});
+        Object.assign(label.style, {horizontalAlign:'center', verticalAlign:'center', fontSize:'24px'});
+        label.hittest = false;
+        btn.SetPanelEvent('onactivate', click);
+        return btn;
+    }
+    const back = button('CS2GCWheelBack', $.Localize('#BuyMenu_Back'), '352px 237px 0px', home);
+    const selectors = cats.map((c,i) => button('CS2GCWheelCat' + i, names[i], spoke(i,5), () => choose(i)));
+    function home() {
+        cats.forEach((c,i) => {
+            const label = c.FindChildrenWithClassTraverse('buymenu__category__column__label')[0];
+            if (label && label.text) selectors[i].Children()[0].text = label.text;
+            c.visible = false;
+            selectors[i].visible = true;
+        });
+        back.visible = false;
+        promo.visible = true;
+    }
+    function choose(i) {
+        const cat = cats[i], list = cat.FindChildTraverse('ItemButtons');
+        cat.visible = true;
+        const rows = list && list.Children().filter(row => row.FindChildTraverse('BuyButton') && row.visible);
+        if (!rows || !rows.length) {
+            cat.visible = false;
+            $.Msg('[CS2GC] No loadout items in ' + names[i]);
+            return;
+        }
+        selectors.forEach(s => s.visible = false);
+        promo.visible = false;
+        back.visible = true;
+        Object.assign(cat.style, {position:'0px 0px 0px',width:'100%',height:'100%'});
+        const header = cat.FindChildrenWithClassTraverse('buymenu__category__column__header')[0];
+        if (header) header.visible = false;
+        Object.assign(list.GetParent().style, {width:'100%',height:'100%',flowChildren:'none'});
+        Object.assign(list.style, {width:'100%',height:'100%',maxHeight:'100%',flowChildren:'none'});
+        rows.forEach((row,j) => Object.assign(row.style, {
+            position:spoke(j,rows.length),width:'240px',height:'64px'
+        }));
+    }
+    root.__cs2gcWheelHome = home;
+    $.RegisterForUnhandledEvent('BuyMenu_Back', () => { if (root.IsValid()) home(); });
+    home();
+})();"""
 
 CLASS_STYLES = {
     'buymenu-body': 'height: 552px;',
@@ -32,16 +88,16 @@ CLASS_STYLES = {
         'height: 28px; margin-bottom: 2px; background-color: #1a272ff5; border-top: 2px solid #cda66c;'),
     'buymenu__category__column__label': 'font-size: 20px; vertical-align: center;',
     'buymenu__category__column__keylabel': 'margin-left: 8px;',
-    # Five full rows fit; a mode with additional items remains scrollable.
     'buymenu__category__itembuttons': 'max-height: 209px; overflow: clip scroll;',
     'button-container': 'height: 39px; margin-bottom: 2px; background-color: #172028df;',
     'buywheel-item__icon': 'horizontal-align: left; margin-left: 23px; height: 25px; width: 43px;',
     'buywheel-item__name': ('horizontal-align: left; vertical-align: center; margin-left: 71px; '
                             'width: 46%; text-align: left; text-overflow: shrink;'),
 }
+# Keep the native columns usable if the wheel cannot initialize.
 ID_STYLES = {
     'CategoryContainer' + str(i): f'width: 276px; position: {x}px {y}px 0px;'
-    for i, (x, y) in enumerate(SPOKES, 1)
+    for i, (x, y) in enumerate(((337, 4), (658, 72), (594, 312), (80, 312), (16, 72)), 1)
 }
 ID_STYLES['CategoryContainerPromo'] = (
     'width: 255px; horizontal-align: left; vertical-align: top; position: 348px 251px 0px;')
@@ -58,9 +114,9 @@ def _name(node, field='name'):
     return value.value if value is not None else ''
 
 
-def _add_style(panel, style):
-    value = Node(OBJECT, [('eType', Node(STRING, 'PANEL_ATTRIBUTE_VALUE')), ('name', Node(STRING, style))])
-    attribute = Node(OBJECT, [('eType', Node(STRING, 'PANEL_ATTRIBUTE')), ('name', Node(STRING, 'style')),
+def _add_attribute(panel, key, text):
+    value = Node(OBJECT, [('eType', Node(STRING, 'PANEL_ATTRIBUTE_VALUE')), ('name', Node(STRING, text))])
+    attribute = Node(OBJECT, [('eType', Node(STRING, 'PANEL_ATTRIBUTE')), ('name', Node(STRING, key)),
                               ('child', value)])
     children = panel.get('vecChildren')
     if children is None:
@@ -82,13 +138,17 @@ def patch_layout(resource):
         children = _children(node)
         if _name(node, 'eType') == 'PANEL':
             attrs = {_name(k): _name(k.get('child')) for k in children if _name(k, 'eType') == 'PANEL_ATTRIBUTE'}
+            if _name(node) == 'CSGOBuyMenu':
+                if 'onload' in attrs:
+                    raise ValueError('unexpected native buy-menu load handler')
+                _add_attribute(node, 'onload', WHEEL_ONLOAD)
             # Prefer the specific promo rule over its ordinary column class.
             style = ID_STYLES.get(attrs.get('id')) or next(
                 (CLASS_STYLES[c] for c in attrs.get('class', '').split() if c in CLASS_STYLES), None)
             if style:
                 if 'style' in attrs:
                     raise ValueError('unexpected inline style on buy control')
-                _add_style(node, style)
+                _add_attribute(node, 'style', style)
         for child in children:
             if _name(child, 'eType') != 'PANEL_ATTRIBUTE':
                 visit(child)
