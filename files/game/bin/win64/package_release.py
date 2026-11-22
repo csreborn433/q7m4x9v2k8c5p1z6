@@ -51,6 +51,10 @@ def project_files(root):
     if read_manifest(bundle) is not None:
         result += [(bundle / name, BIN + BUNDLE + '/' + name)
                    for name in (MANIFEST, 'pak01_dir.vpk', 'pak01_000.vpk')]
+    import native_prime_karambit as prime
+    bundle = tools / prime.BUNDLE
+    if prime.read_bundle(bundle) is not None:
+        result += [(bundle / name, BIN + prime.BUNDLE + '/' + name) for name in (prime.BUNDLE_MANIFEST, *prime.PACKS)]
     return result
 
 

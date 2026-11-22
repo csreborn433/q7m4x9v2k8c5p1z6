@@ -75,7 +75,7 @@ class PreparationCache:
         files.update(p for p in self.helpers.glob('*.py') if not (heavy and p.name in light)
                      and (portable or p.name not in LEGACY_NEW_FILES))
         if legacy_gloves:files.add(self.helpers/'native_gloves.py')
-        for folder in ('collection_icons', 'weapon_patterns', 'cs2_gc_anime_agent_assets'):
+        for folder in ('collection_icons', 'weapon_patterns', 'cs2_gc_anime_agent_assets', 'cs2_gc_prime_karambit_assets'):
             files.update(p for p in (self.helpers / folder).rglob('*') if p.is_file())
         files.update(self.helpers.glob('*.png'))
         files.update(self.proxy / n for n in ('gold_pools.txt','cs2_gc_texture_decode.exe'))

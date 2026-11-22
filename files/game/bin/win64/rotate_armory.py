@@ -78,7 +78,7 @@ INSERT = '''    // Local GC Armory rotation: generated settings must match cs2_g
         limited: ['crate_cs2gc_anime', 'crate_cs2gc_black_market']
     };
     // The two "random gun collection" tiles are official collections other than the ones the
-    // sticker capsule and Name Tag tiles replaced; the capsule tile is a sticker capsule.
+    // sticker capsule and tool (PRIME Karambit, else Name Tag) tiles replaced; the capsule tile is a sticker capsule.
     const _LocalReplacedCollections = ['lootlist:set_arabesque', 'lootlist:set_graphic_design'];
     function _LocalPickLast(slot, name) {
         name = String(name);
@@ -329,6 +329,8 @@ PREPARE = '''        // Resolve each tile from its own native row, without inher
             if (slot === 'tool') {
                 entry.lootlist = [InventoryAPI.GetFauxItemIDFromDefAndPaintIndex(
                     InventoryAPI.GetItemDefinitionIndexFromDefinitionName(entry.item_name), 0)];
+                // A knife tool tile (the PRIME Karambit) previews in the stock 3D inspect scene, like a weapon.
+                entry.local_melee = ItemInfo.IsMelee(entry.lootlist[0]);
                 delete entry.suffix_loc_string;
             }
             if(entry.item_name==='lootlist:cs2gc_chicken_cosmetics')entry.lootlist_item_type='sticker';
@@ -426,6 +428,10 @@ def patch_previews(source):
     # An optional preview change must not disable rotation/catalogue controls.
     artwork = "['crate_cs2gc_karambit', 'crate_cs2gc_vanilla', 'Name Tag'].indexOf(ShopEntry.item_name) !== -1"
     source = source.replace(grid, "                if (ShopEntry.local_agent || " + artwork + ") return;\n" + grid, 1)
+    # The stock grid re-initialises a limited weapon's 3D preview whenever its grid is shown again; a melee tile
+    # (the PRIME Karambit) is the same single-item inspect scene, so it gets the same refresh.
+    reopen = "ShopEntry.lootlist_item_type === 'weapon' && ShopEntry.lootlist.length == 1) {"
+    source = source.replace(reopen, "(ShopEntry.lootlist_item_type === 'weapon' || ShopEntry.local_melee) && ShopEntry.lootlist.length == 1) {", 1)
     create = "    function CreateShopTile(elTilesContainer, itemId, ShopEntry) {"
     agent = '''
         if (['crate_cs2gc_anime', 'crate_cs2gc_karambit', 'crate_cs2gc_vanilla', 'Name Tag'].indexOf(ShopEntry.item_name) !== -1) {

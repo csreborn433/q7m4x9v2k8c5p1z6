@@ -275,6 +275,24 @@ WHATS_NEW = """
             const body = $.CreatePanel('Panel', card, 'cs2gc-whatsnew-body');
             Object.assign(body.style, {width: '100%', height: 'fill-parent-flow(1.0)', flowChildren: 'down',
                 overflow: 'squish scroll', padding: '10px 32px 18px 32px'});
+            // The PRIME Karambit picture sits directly below its own bulletin (data.primeAfter).
+            function _LocalWhatsNewPrime() {
+                const prime = $.CreatePanel('Panel', body, 'cs2gc-whatsnew-prime');
+                Object.assign(prime.style, {width:'100%', flowChildren:'right', marginTop:'2px', marginBottom:'12px',
+                    paddingLeft:'17px'});
+                const tile = $.CreatePanel('Panel', prime, '');
+                Object.assign(tile.style, {width:'300px', flowChildren:'down', margin:'0px 4px',
+                    backgroundColor:'#ffffff08', borderRadius:'3px'});
+                const picture = $.CreatePanel('Image', tile, '', {scaling:'stretch-to-fit-preserve-aspect'});
+                picture.SetImage('file://{images}/' + data.prime.icon + '.png');
+                Object.assign(picture.style, {width:'100%', height:'170px'});
+                const name = _LocalWhatsNewLabel(tile, data.prime.name, 'stratum-bold-condensed', 18, '#ffffff');
+                Object.assign(name.style, {textAlign:'center', marginBottom:'8px'});
+                const rarity = $.CreatePanel('Panel', tile, '');
+                Object.assign(rarity.style, {width:'100%', height:'3px', backgroundColor:data.prime.color});
+                tile.hittest = false;
+                tile.hittestchildren = false;
+            }
             // The anime agent portraits sit directly below their own bulletin (data.agentsAfter).
             function _LocalWhatsNewAgents() {
                 const agents = $.CreatePanel('Panel', body, 'cs2gc-whatsnew-agents');
@@ -310,6 +328,7 @@ WHATS_NEW = """
                     Object.assign(column.style, {width: 'fill-parent-flow(1.0)', flowChildren: 'down'});
                     _LocalWhatsNewLabel(column, entry[0], 'stratum-bold', 18, '#ffffff');
                     _LocalWhatsNewLabel(column, entry[1], 'stratum-regular', 17, '#c9d0da');
+                    if (entry[0] === data.primeAfter) _LocalWhatsNewPrime();
                     if (entry[0] === data.agentsAfter) _LocalWhatsNewAgents();
                 });
             });
@@ -775,16 +794,22 @@ UPDATE_BANNER = """
 
 
 def whats_new_script():
-    from whats_new import AGENTS_AFTER, DISPLAY_VERSION, SEEN_ID, SECTIONS, SUBTITLE, TITLE
+    from whats_new import AGENTS_AFTER, DISPLAY_VERSION, PRIME_AFTER, SEEN_ID, SECTIONS, SUBTITLE, TITLE
     from native_agents import AGENTS, DISPLAY_NAMES, PREFIX
-    if AGENTS_AFTER not in [lead for _, entries in SECTIONS for lead, _ in entries]:
-        raise ValueError("What's New has no bulletin for the agent portraits: " + AGENTS_AFTER)
+    from native_prime_karambit import IMAGE, TITLE as PRIME_TITLE
+    leads = [lead for _, entries in SECTIONS for lead, _ in entries]
+    for after in (AGENTS_AFTER, PRIME_AFTER):
+        if after not in leads:
+            raise ValueError("What's New has no bulletin for its picture: " + after)
     colors = {'mythical': '#8847ff', 'legendary': '#d32ce6', 'ancient': '#eb4b4b'}
     data = {'title': TITLE, 'subtitle': SUBTITLE, 'sections': [[header, [list(entry) for entry in entries]]
                                                                 for header, entries in SECTIONS],
             'agentsAfter': AGENTS_AFTER,
             'agents': [dict(name=DISPLAY_NAMES[title], icon=PREFIX + title.lower(), color=colors[rarity])
-                       for title, _, rarity in AGENTS]}
+                       for title, _, rarity in AGENTS],
+            'primeAfter': PRIME_AFTER,
+            # The Armory tile's own inventory image, shipped in the Prime bundle; gold is the special-item colour.
+            'prime': dict(name=PRIME_TITLE, icon=IMAGE, color='#e4ae39')}
     return (WHATS_NEW.replace('__SEEN__', json.dumps(SEEN_ID)).replace('__DATA__', json.dumps(data))
             .replace('__RELEASE__', json.dumps(DISPLAY_VERSION)))
 
@@ -1085,6 +1110,41 @@ def patch_watch_labels(text):
     return text
 
 
+# The main-menu scenery is fixed to the warehouse. The stock script follows the saved choice and defaults to Dust II.
+SCENERY_STOCK = """        let savedMapName = GameInterfaceAPI.GetSettingString('ui_mainmenu_bkgnd_movie');
+        let backgroundMap = !savedMapName ? 'de_dust2_vanity' : savedMapName + '_vanity';
+"""
+SCENERY = """        // cs2_gc: the main-menu scenery is fixed to the warehouse; the stock per-player choice no longer applies.
+        try {
+            // Keep the other readers of the setting (item inspect, pet popup) on the same scenery.
+            if (GameInterfaceAPI.GetSettingString('ui_mainmenu_bkgnd_movie') !== 'warehouse')
+                GameInterfaceAPI.SetSettingString('ui_mainmenu_bkgnd_movie', 'warehouse');
+        } catch (error) { }
+        let savedMapName = 'warehouse';
+        let backgroundMap = 'warehouse_vanity';
+"""
+# The stock vanity context menu lists "Change Main Menu Scenery" first and focuses it.
+VANITY_MAP_ITEM = """        fnAddVanityPopupMenuItem('ChangeVanityMap', '#mainmenu_change_vanity_map', () => {
+            const elVanityContextMenu = UiToolkitAPI.ShowCustomLayoutContextMenuParametersDismissEvent('id-vanity-contextmenu-maps', '', 'file://{resources}/layout/context_menus/context_menu_mainmenu_vanity.xml', 'type=maps', () => $.DispatchEvent('ContextMenuEvent', ''));
+            elVanityContextMenu.AddClass('ContextMenu_NoArrow');
+        })
+            .SetFocus();
+"""
+VANITY_FOCUS_ANCHOR = "        let strOtherTeamToPrecache = "
+VANITY_FOCUS = """        // cs2_gc: the scenery entry is gone, so the first remaining entry takes the focus.
+        const elFirstVanityItem = elContextMenuBodyNoScroll.FindChild('ChangeWeapon');
+        if (elFirstVanityItem) elFirstVanityItem.SetFocus();
+"""
+
+
+def patch_vanity_menu(source):
+    """Drop the main-menu scenery entry; the item-inspect scenery picker (inspect-map=true) is untouched."""
+    if source.count(VANITY_MAP_ITEM) != 1 or source.count(VANITY_FOCUS_ANCHOR) != 1 or 'cs2_gc:' in source:
+        raise ValueError('Installed vanity context menu changed; no patch written')
+    source = source.replace(VANITY_MAP_ITEM, '', 1)
+    return source.replace(VANITY_FOCUS_ANCHOR, VANITY_FOCUS + VANITY_FOCUS_ANCHOR, 1)
+
+
 def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
     store = "NavigateToTab('JsMainMenuStore', 'mainmenu_store_fullscreen', openToSection !== '' ? openToSection : 'id-store-nav-coupon');"
     store_replacement = "NavigateToTab('JsMainMenuStore', 'mainmenu_store_fullscreen', 'id-store-nav-xpshop');"
@@ -1093,7 +1153,7 @@ def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
         if (missionPanel) { missionPanel.visible = false; missionPanel.style.visibility = 'collapse'; }"""
     floating_hide = '    function _HideFloatingPanels() {'
     if (source.count(ANCHOR) != 1 or source.count(HIDE_ANCHOR) != 1 or
-            source.count(floating_hide) != 1 or
+            source.count(floating_hide) != 1 or source.count(SCENERY_STOCK) != 1 or
             source.count(store) != 1 or source.count(mission) != 1 or
             'cs2_gc: cosmetic only' in source or 'const statsNav =' in source or
             '_LocalHideNewPopular' in source or '_LocalHideMainMenuFriendsSidebar' in source or
@@ -1127,6 +1187,7 @@ def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
         }
 ''', 1)
     source=source.replace(store, store_replacement, 1)
+    source=source.replace(SCENERY_STOCK, SCENERY, 1)
     source=source.replace(mission, '_LocalHideRecentPulls($.GetContextPanel());\n        ' + mission_replacement, 1)
     if care_packages:
         anchor = """        if (!$('#MainMenuNavBarHome').checked)
@@ -1184,4 +1245,7 @@ def prepare(directory, config):
     watch=install_override(directory, enabled=True, folder='cs2_gc_watch_settings',
         comment='cs2_gc NEW settings placeholder', owner='cs2-gc-watch-settings-v1',
         asset='panorama/scripts/mainmenu_watch.vts_c', patch=patch_watch)
-    return menu + '; ' + food + '; ' + watch
+    vanity=install_override(directory, enabled=True, folder='cs2_gc_vanity_menu',
+        comment='cs2_gc fixed main-menu scenery', owner='cs2-gc-vanity-menu-v1',
+        asset='panorama/scripts/context_menus/context_menu_mainmenu_vanity.vts_c', patch=patch_vanity_menu)
+    return menu + '; ' + food + '; ' + watch + '; ' + vanity

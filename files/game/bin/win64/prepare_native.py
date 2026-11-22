@@ -36,7 +36,7 @@ from native_resources import ensure_first_game_path, install_override
 from vpk_signatures import update as signatures
 from preparation_cache import PreparationCache
 from native_agents import prepare as anime_agents, install_bundle as anime_bundle
-from native_prime_karambit import prepare as prime_karambit
+from native_prime_karambit import prepare as prime_karambit, install_bundle as prime_bundle
 
 
 
@@ -85,6 +85,7 @@ def prepare(directory, force_rebuild=False):
     started = time.perf_counter()
     config = load(directory)
     print('Anime payload: ' + anime_bundle(directory), flush=True)
+    print('Prime Karambit payload: ' + prime_bundle(directory), flush=True)
     game = Path(directory).resolve().parents[1]
     print('Settings config: ' + ensure_settings_cfg(game / 'csgo/cfg'), flush=True)
     print('Legacy clutch HUD: ' + disable_legacy_win_meter(directory), flush=True)

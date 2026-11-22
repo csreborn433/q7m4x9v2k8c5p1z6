@@ -3,17 +3,21 @@
 RELEASE must match data/mod_version.txt. Closing the window saves ui_cs2gc_whatsnew = SEEN_ID through the NEW
 settings bridge (native_newsettings.py), so it appears again only after the next update changes RELEASE.
 """
-RELEASE = '1.0.3'
-SEEN_ID = 'r1_0_3'
+RELEASE = '1.0.4'
+SEEN_ID = 'r1_0_4'
 DISPLAY_VERSION = 'V1.0'  # Patch releases share one player-facing bulletin.
 TITLE = "WHAT'S NEW IN CS-REBORN"
 SUBTITLE = DISPLAY_VERSION
-# The anime agent portraits are drawn directly below this bulletin.
+# The PRIME Karambit picture and the anime agent portraits are drawn directly below these bulletins.
+PRIME_AFTER = 'NEW: PRIME Karambit'
 AGENTS_AFTER = 'NEW: Anime Case'
 
 # (header, [(bold lead, text)]) in display order.
 SECTIONS = [
     ("NEW IN " + DISPLAY_VERSION, [
+        ('NEW: PRIME Karambit', 'a standalone Karambit ported from CS 1.6, with its own inspect, draw and attack '
+                                'animations and a 3D preview. Buy it in the Armory for 30 stars, then equip it as '
+                                'your CT or T knife.'),
         ('Launch banner', 'Play shows a CS:REBORN loading banner while your game is being prepared.'),
         ('Black Market', 'the former Parties tab is now BLACK MARKET: six tall offers drawn at random for your '
                          'account and then fixed, so they never change. Click a card to reveal a rare '
@@ -27,7 +31,7 @@ SECTIONS = [
         ('Cobblestone only', 'Play now offers just Cobblestone in Casual, Competitive and Wingman. '
                              'Overpass is removed from the list.'),
         ('Armory refresh', 'a fixed 4/3/4 page. Top: Missing Link Charms (3 stars), a sticker capsule (2), the '
-                           'stkr craft stickers (2) and a Name Tag (1). Middle: the Sport & Field Collection (10), '
+                           'stkr craft stickers (2) and the PRIME Karambit (30). Middle: the Sport & Field Collection (10), '
                            'the Anime Case (50) and the new glove-only Gauntlet Case (15). Bottom: Overpass 2024 (5), '
                            'Dreams & Nightmares Case (5), the Dead Hand Terminal (5) and the new Vanilla Knife Case (15).'),
         ('Vanilla Knife Case', 'opens without a key and gives one random vanilla knife, with a chance of StatTrak. '

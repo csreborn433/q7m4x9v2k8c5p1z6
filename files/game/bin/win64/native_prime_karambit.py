@@ -33,6 +33,11 @@ SOUND_MANIFEST = 'soundevents/soundevents_manifest.vrman_c'
 OVERRIDES = (ROOT_GRAPH, WEAPONS, SOUND_MANIFEST)
 CLIP_FOLDER = 'animation/anims/viewmodel/knife/cs2gc_prime_karambit/'
 CLIPS = ('idle', 'draw', 'inspect_1', 'slash1', 'slash2', 'midslash1', 'midslash2', 'stab', 'stab_miss')
+HUD_ICON = 'panorama/images/icons/equipment/knife_cs2gc_prime_karambit.vsvg_c'
+DESCRIPTION = 'The original PRIME Karambit, with its own inspect and attack animations.'
+BUNDLE = 'cs2_gc_prime_karambit_assets'
+BUNDLE_MANIFEST = 'cs2_gc_prime_karambit_bundle.json'
+PACKS = ('pak01_dir.vpk', 'pak01_000.vpk')
 
 
 def resource_parts(data):
@@ -240,7 +245,7 @@ def knife_row(sections):
     original = sections['items'].get('507')
     if original is None or as_dict(original).get('name') != 'weapon_knife_karambit':
         raise ValueError('Missing native Karambit economy definition')
-    replacements = {'name': NAME, 'item_name': TITLE, 'item_description': 'Standalone PRIME Karambit test model.',
+    replacements = {'name': NAME, 'item_name': TITLE, 'item_description': DESCRIPTION,
                     'image_inventory': IMAGE, 'model_player': MODEL, 'model_world': MODEL,
                     'attributes': [('pedestal display model', MODEL)]}
     row = [(key, replacements.get(key, copy.deepcopy(value))) for key, value in original
@@ -272,7 +277,7 @@ def patch_schema(source, definition, enabled=True):
     return source
 
 
-def installed_manifest(proxy):
+def installed_manifest(proxy, verify_packs=True):
     folder = Path(proxy).resolve().parents[1] / FOLDER
     path = folder / MANIFEST
     if not path.exists():
@@ -287,10 +292,19 @@ def installed_manifest(proxy):
             or not isinstance(manifest.get('client_inputs'), dict)
             or set(manifest.get('client_inputs', {})) != {*OVERRIDES, PRIMARY + '_c'}):
         raise ValueError('Prime Karambit manifest identity differs')
-    for name in ('pak01_dir.vpk', 'pak01_000.vpk'):
-        if hashlib.sha256((folder / name).read_bytes()).hexdigest() != manifest['packs'][name]:
-            raise ValueError('Prime Karambit pack changed: ' + name)
+    if verify_packs:
+        for name in PACKS:
+            if hashlib.sha256((folder / name).read_bytes()).hexdigest() != manifest['packs'][name]:
+                raise ValueError('Prime Karambit pack changed: ' + name)
     return manifest
+
+
+def packs_match(folder, packs):
+    """True when both pack files exist and hash to the recorded values (an interrupted install leaves them apart)."""
+    folder = Path(folder)
+    return isinstance(packs, dict) and all(
+        (folder / name).is_file() and hashlib.sha256((folder / name).read_bytes()).hexdigest() == packs.get(name)
+        for name in PACKS)
 
 
 def check_client(proxy, manifest):
@@ -351,16 +365,17 @@ def prepare(proxy, config):
     return status + ': standalone knife; live validation is separate'
 
 
-def build_assets(proxy, sdk, icon):
+def owned_assets(proxy, sdk, icon):
+    """Resources this addon authored, read from the SDK output. The client-derived overrides are not part of them."""
     proxy, sdk = Path(proxy).resolve(), Path(sdk).resolve()
     previous = installed_manifest(proxy)
     game = proxy.parents[1]
     installed = Source(vpk=game / 'csgo/pak01_dir.vpk')
-    core = Source(vpk=game / 'core/pak01_dir.vpk')
     schema = read_text(game / 'cs2_gc_native/scripts/items/items_game.txt')
     items = collect(parse(schema))['items']
     definition = previous['definition'] if previous else str(next(i for i in range(57000, 65536) if str(i) not in items))
-    patch_schema(schema, definition)
+    if previous is None:
+        patch_schema(schema, definition)
     output = sdk / 'game/csgo'
     namespaces = ('models/cs2gc_prime_karambit', 'materials/cs2gc_prime_karambit',
                   'animation/skeletons/cs2gc_prime_karambit', CLIP_FOLDER, 'sounds/cs2gc_prime_karambit')
@@ -368,18 +383,29 @@ def build_assets(proxy, sdk, icon):
              for path in (output / namespace).rglob('*') if path.is_file() and path.name.endswith('_c')}
     for path in (GRAPH, SOUND_EVENTS, DEPENDENCIES):
         files[path + '_c'] = (output / (path + '_c')).read_bytes()
+    files[HUD_ICON] = (output / HUD_ICON).read_bytes()
     report = json.loads(read_text(sdk / 'content/csgo' / CLIP_FOLDER / 'compiled_validation.json'))
     for name in CLIPS:
         path = CLIP_FOLDER + name + '.vnmclip_c'
         if hashlib.sha256(files[path]).hexdigest() != report['animations'][name]['sha256']:
             raise ValueError('Compiled animation must pass --verify again: ' + name)
-    ids = reference_ids(files[DEPENDENCIES + '_c'])
-    inputs = {path: installed.read(path) for path in (*OVERRIDES, PRIMARY + '_c')}
+    template = installed.read('panorama/images/econ/weapons/base_weapons/weapon_knife_karambit_png.vtex_c')
+    files['panorama/images/' + IMAGE + '_png.vtex_c'] = make_vtex(template, Path(icon).read_bytes())
+    return files, report, definition, previous
+
+
+def assemble(owned, installed, core, definition):
+    """Add the three overrides derived from this client, then check collisions and dependencies."""
+    inputs = {}
+    for path in (*OVERRIDES, PRIMARY + '_c'):
+        inputs[path] = installed.read(path)
+        if inputs[path] is None:
+            raise ValueError('CS2 client resource missing: ' + path)
+    ids = reference_ids(owned[DEPENDENCIES + '_c'])
+    files = dict(owned)
     files[ROOT_GRAPH] = graph_override(inputs[ROOT_GRAPH], ids)
     files[WEAPONS] = weapon_override(inputs[WEAPONS], definition)
     files[SOUND_MANIFEST] = sound_manifest_override(inputs[SOUND_MANIFEST], ids)
-    template = installed.read('panorama/images/econ/weapons/base_weapons/weapon_knife_karambit_png.vtex_c')
-    files['panorama/images/' + IMAGE + '_png.vtex_c'] = make_vtex(template, Path(icon).read_bytes())
     required = (MODEL + '_c', SECONDARY + '_c', GRAPH + '_c', SOUND_EVENTS + '_c')
     if any(path not in files for path in required):
         raise ValueError('Compiled standalone knife assets are incomplete')
@@ -393,10 +419,18 @@ def build_assets(proxy, sdk, icon):
                 if not installed.exists(target) and not core.exists(target):
                     raise ValueError('Unresolved knife dependency: ' + target)
                 dependencies.add(target)
+    return files, inputs, sorted(dependencies)
+
+
+def build_assets(proxy, sdk, icon):
+    owned, report, definition, previous = owned_assets(proxy, sdk, icon)
+    game = Path(proxy).resolve().parents[1]
+    files, inputs, dependencies = assemble(owned, Source(vpk=game / 'csgo/pak01_dir.vpk'),
+                                           Source(vpk=game / 'core/pak01_dir.vpk'), definition)
     manifest = {'owner': OWNER, 'name': NAME, 'definition': definition,
                 'enabled': previous.get('enabled', True) if previous else True,
                 'client_inputs': {path: hashlib.sha256(data).hexdigest() for path, data in inputs.items()},
-                'dependencies': sorted(dependencies), 'animation_validation': report}
+                'dependencies': dependencies, 'animation_validation': report}
     return files, manifest
 
 
@@ -417,6 +451,96 @@ def install_assets(proxy, sdk, icon):
     return manifest
 
 
+def write_bundle(owned, report, definition, target):
+    from vpk_pack import _write, build
+    if any(path in owned for path in OVERRIDES):
+        raise ValueError('The bundle must not contain client-derived resources')
+    directory, archive = build(sorted(owned.items()))
+    manifest = {'owner': OWNER, 'name': NAME, 'definition': definition,
+                'files': {path: hashlib.sha256(data).hexdigest() for path, data in sorted(owned.items())},
+                'packs': {name: hashlib.sha256(data).hexdigest() for name, data in zip(PACKS, (directory, archive))},
+                'animation_validation': report}
+    target = Path(target)
+    target.mkdir(parents=True, exist_ok=True)
+    _write(target / 'pak01_000.vpk', archive)
+    _write(target / 'pak01_dir.vpk', directory)
+    atomic_write(target / BUNDLE_MANIFEST, json.dumps(manifest, indent=2) + '\n')
+    return manifest
+
+
+def export_bundle(proxy, sdk, icon, target):
+    """Developer step: the launcher payload. It holds only owned resources, never the client-derived overrides."""
+    owned, report, definition, _ = owned_assets(proxy, sdk, icon)
+    game = Path(proxy).resolve().parents[1]
+    assemble(owned, Source(vpk=game / 'csgo/pak01_dir.vpk'), Source(vpk=game / 'core/pak01_dir.vpk'), definition)
+    return write_bundle(owned, report, definition, target)
+
+
+def read_bundle(folder):
+    """The verified bundle manifest and its owned files; None when this build carries no Prime Karambit."""
+    folder = Path(folder)
+    path = folder / BUNDLE_MANIFEST
+    if not path.exists():
+        if folder.exists() and any(folder.iterdir()):
+            raise ValueError('Prime Karambit bundle folder contains unowned files')
+        return None
+    manifest = json.loads(read_text(path))
+    if (manifest.get('owner') != OWNER or manifest.get('name') != NAME
+            or not isinstance(manifest.get('definition'), str) or not manifest['definition'].isdigit()
+            or not 57000 <= int(manifest['definition']) <= 65535
+            or not isinstance(manifest.get('files'), dict) or not isinstance(manifest.get('packs'), dict)):
+        raise ValueError('Prime Karambit bundle identity differs')
+    if not packs_match(folder, manifest['packs']):
+        raise ValueError('Prime Karambit bundle pack is missing or changed')
+    if any(path in OVERRIDES for path in manifest['files']):
+        raise ValueError('Prime Karambit bundle must not carry client-derived resources')
+    source = Source(vpk=folder / 'pak01_dir.vpk')
+    files = {path: source.read(path) for path in manifest['files']}
+    for path, expected in manifest['files'].items():
+        if files[path] is None or hashlib.sha256(files[path]).hexdigest() != expected:
+            raise ValueError('Prime Karambit bundle file is missing or changed: ' + path)
+    return manifest, files
+
+
+def install_bundle(proxy):
+    """Launcher payload: rebuild this machine's pack from the owned bundle and the player's own CS2 files."""
+    proxy = Path(proxy).resolve()
+    bundled = read_bundle(proxy / BUNDLE)
+    if bundled is None:
+        return 'no bundled Prime Karambit'
+    bundle, owned = bundled
+    game = proxy.parents[1]
+    installed = Source(vpk=game / 'csgo/pak01_dir.vpk')
+    core = Source(vpk=game / 'core/pak01_dir.vpk')
+    state = hashlib.sha256(json.dumps(bundle, sort_keys=True).encode('utf-8')).hexdigest()
+    previous = installed_manifest(proxy, verify_packs=False)
+    folder = game / FOLDER
+    current = {}
+    for path in (*OVERRIDES, PRIMARY + '_c'):
+        data = installed.read(path)
+        if data is None:
+            raise ValueError('CS2 client resource missing: ' + path)
+        current[path] = hashlib.sha256(data).hexdigest()
+    if (previous is not None and previous.get('bundle') == state and previous['client_inputs'] == current
+            and packs_match(folder, previous.get('packs'))):
+        return 'bundled Prime Karambit already installed'
+    from fair_bot_policy import require_game_closed
+    from vpk_pack import _write, build
+    require_game_closed()
+    files, inputs, dependencies = assemble(owned, installed, core, bundle['definition'])
+    directory, archive = build(sorted(files.items()))
+    manifest = {'owner': OWNER, 'name': NAME, 'definition': bundle['definition'],
+                'enabled': previous['enabled'] if previous else True,
+                'client_inputs': current, 'dependencies': dependencies,
+                'animation_validation': bundle.get('animation_validation'), 'bundle': state,
+                'packs': {name: hashlib.sha256(data).hexdigest() for name, data in zip(PACKS, (directory, archive))}}
+    folder.mkdir(parents=True, exist_ok=True)
+    _write(folder / 'pak01_000.vpk', archive)
+    _write(folder / 'pak01_dir.vpk', directory)
+    atomic_write(folder / MANIFEST, json.dumps(manifest, indent=2) + '\n')
+    return 'installed bundled Prime Karambit'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--proxy-dir', type=Path, required=True)
@@ -424,6 +548,8 @@ def main():
     parser.add_argument('--icon', type=Path)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--check', action='store_true', help='Validate and construct assets without installing')
+    modes.add_argument('--export-bundle', action='store_true',
+                       help='Write the launcher payload (owned resources only) to tools/' + BUNDLE)
     modes.add_argument('--disable', action='store_true', help='Remove only this owned knife row and addon mount')
     modes.add_argument('--enable', action='store_true', help='Restore the already installed test knife')
     args = parser.parse_args()
@@ -443,6 +569,9 @@ def main():
         print(update(args.proxy_dir))
     elif args.sdk is None or args.icon is None:
         parser.error('--sdk and --icon are required for validation or installation')
+    elif args.export_bundle:
+        manifest = export_bundle(args.proxy_dir, args.sdk, args.icon, Path(__file__).resolve().parent / BUNDLE)
+        print(f'Exported {len(manifest["files"])} owned resources for item {manifest["definition"]} to tools/{BUNDLE}.')
     elif args.check:
         files, manifest = build_assets(args.proxy_dir, args.sdk, args.icon)
         print(f'Validated {len(files)} assets; candidate item ID {manifest["definition"]}. No installation changes.')

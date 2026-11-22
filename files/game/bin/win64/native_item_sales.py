@@ -72,6 +72,10 @@ def settings(source, config):
         return result
     if '11' in sections.get('seasonaloperations',{}):
         for good in catalogue(source,config).values():
+            # A plain knife sold in the Armory's tool tile resells for a share of its price (cs2_gc ItemSaleValue).
+            definition=names.get(good['item_name'])
+            if good['local_rotation_slot']=='tool' and definition in gold_definitions:
+                flat[definition]=int(good['points'])*config['sell_agent_percent']//100
             if good['local_rotation_slot']=='limited' and good['item_name'].startswith('lootlist:'):
                 outcomes=skins(good['item_name'][9:])
                 if len(outcomes)==1:

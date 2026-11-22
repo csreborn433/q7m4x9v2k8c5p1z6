@@ -30,6 +30,10 @@ LIMITED_LISTS = tuple(LIMITED_PRICES)
 CUSTOM_CASE_PRICES = {'crate_cs2gc_vanilla': 15, 'crate_cs2gc_gauntlet': 15}
 # Fixed tile prices that differ from their category price.
 FIXED_PRICES = {'lootlist:set_realism_camo': 10, 'Name Tag': 1}
+# The single "tool" tile sells the PRIME Karambit (native_prime_karambit.NAME) while that item is installed,
+# in the Name Tag's place; the Name Tag returns only when the Prime is not installed.
+PRIME_KARAMBIT = 'weapon_knife_cs2gc_prime_karambit'
+PRIME_KARAMBIT_PRICE = 30
 # Cases never offered in the Armory rotation. crate_community_4 is the Operation Breakout
 # Weapon Case; the user wants a different case in its slot (everything else unchanged).
 ROTATION_EXCLUDED_CASES = {'crate_community_4'}
@@ -117,7 +121,9 @@ def catalogue(source, config):
     for name, price in CUSTOM_CASE_PRICES.items():
         if name == 'crate_cs2gc_gauntlet' and not config.get('glove_finishes', 1): continue
         if name in items: add(name, 'case', price, {'flags': '2'})
-    if 'Name Tag' in items:
+    if PRIME_KARAMBIT in items:
+        add(PRIME_KARAMBIT, 'tool', PRIME_KARAMBIT_PRICE)
+    elif 'Name Tag' in items:
         add('Name Tag', 'tool', 1)
 
     def loot(name, slot, price):
