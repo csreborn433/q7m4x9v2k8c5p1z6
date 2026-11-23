@@ -123,7 +123,13 @@ def build_archive(root, runtime_data, bot_files, *, local_test=False):
               (proxy,BIN+'cs2_gc_payload/steam_api64.dll'),
               (root/'data/gold_pools.txt',BIN+'gold_pools.txt'),
               (root/'LICENSE','licenses/CS2-GC-LICENSE.txt'),
-              (root/'data/CSGO-API-LICENSE','licenses/CSGO-API-LICENSE.txt')]
+              (root/'data/CSGO-API-LICENSE','licenses/CSGO-API-LICENSE.txt'),
+              (root/'README.md','README.md'),
+              (root/'docs/DOWNGRADE.md','README-DOWNGRADE.md'),
+              (root/'docs/INSTALL.md','README-INSTALL.md'),
+              (root/'docs/FEATURES.md','FEATURES.md')]
+    for name in ('INSTALL.md','DOWNGRADE.md','FEATURES.md','FEATURE-ROADMAP.md','ALL-COLLECTIONS.md','CLIENT-REVIEW.md','PREPARATION-PERFORMANCE.md','COLOURWAY-REVIEW.md'):
+        files.append((root/'docs'/name,'docs/'+name))
     manifest = {'format':1,'commit':source_commit(root),'version':mod_version(root),
                 'supported_build':json.loads((root/'data/supported_build.json').read_text()),
                 'python_source':PYTHON_URL,'python_archive_sha256':hashlib.sha256(runtime_data).hexdigest(),
@@ -141,7 +147,10 @@ def build_archive(root, runtime_data, bot_files, *, local_test=False):
             if name.startswith(BIN) or name == 'Launch CS2 GC.exe':
                 manifest['files'][name] = hashlib.sha256(data).hexdigest()
         for path,name in files:
-            add(name,path.read_bytes())
+            data = path.read_bytes()
+            if name in ('README-INSTALL.md','FEATURES.md'):
+                data = data.replace(b'(DOWNGRADE.md)',b'(README-DOWNGRADE.md)').replace(b'(INSTALL.md)',b'(README-INSTALL.md)')
+            add(name,data)
         for name,data in bot_files.items():
             add(name,data)
         for name,data in career_payload(root).items():add(name,data)

@@ -130,7 +130,7 @@ SOCIAL_MENU = r"""
                 (intro && intro.visible && !intro.BIsTransparent()) ||
                 _cs2gcPartyMenu.BHasClass('MainMenuRootPanel--PauseMenuMode') ||
                 _cs2gcPartyMenu.FindChildTraverse('cs2gc-whatsnew') || _LocalPartiesScreenOpen()) {
-                _LocalHideRecentPulls(_cs2gcPartyMenu);
+                if (box) box.visible = false;
                 return;
             }
             if (!box) {

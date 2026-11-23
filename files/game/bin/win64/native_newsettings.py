@@ -6,7 +6,6 @@ import struct
 
 from native_resources import console_log_path, install_override, mount_gameinfo, read_text
 from native_beta_buy import remove as remove_beta_buy
-from native_beta_buy import remove_classic
 from native_tradeups import atomic_write
 from whats_new import SEEN_ID as WHATS_NEW_SEEN
 
@@ -38,6 +37,8 @@ DEFAULT_FRAME_LIMITS = [('fps_max', '222'), ('fps_max_ui', '99')]
 LOW_END_JS = '[' + ','.join("['%s','%s','%s']" % row for row in LOW_END) + ']'
 RESTORE_KEY = 'ui_cs2gc_lowend_restore'
 RESTORE_VALUE = r'(?:-1|0|[1-9]\d{0,8})_[01]_[01]'
+PRESET_RESTORE_KEY = 'ui_cs2gc_lowend_preset'
+PRESET_RESTORE_VALUE = r'[0-4]'
 LOW_END_TOGGLE_JS = """
     const csLowEnd = __LOWEND__;
     let csLowEndBefore = GameInterfaceAPI.GetSettingString('__KEY__');
@@ -57,11 +58,13 @@ LOW_END_TOGGLE_JS = """
         csLowEnd.forEach(([name,low,normal],i) => {
             if (on || read(name) === low) GameInterfaceAPI.SetSettingString(name, on ? low : before[i] || normal);
         });
+        if (typeof SettingsMenuVideo !== 'undefined' && SettingsMenuVideo.ApplyLowEndPreset)
+            SettingsMenuVideo.ApplyLowEndPreset(on);
     }
 """.replace('__LOWEND__', LOW_END_JS).replace('__RESTORE__', RESTORE_VALUE).replace('__KEY__', RESTORE_KEY)
 DEFAULTS = {'ui_low_end_pc': '0', 'ui_cs2gc_buymenu': 'cs2', 'ui_cs2gc_animations': 'cs2',
-            'ui_cs2gc_whatsnew': '0', 'ui_cs2gc_smoke': '0', 'ui_cs2gc_controls_v1': '0', 'ui_cs2gc_home_v1': '0'}
-PREVIOUS_KEYS = tuple(key for key in DEFAULTS if key not in ('ui_cs2gc_smoke', 'ui_cs2gc_controls_v1', 'ui_cs2gc_home_v1'))
+            'ui_cs2gc_whatsnew': '0', 'ui_cs2gc_smoke': '0', 'ui_cs2gc_controls_v1': '0'}
+PREVIOUS_KEYS = tuple(key for key in DEFAULTS if key not in ('ui_cs2gc_smoke', 'ui_cs2gc_controls_v1'))
 WHEEL_FOLDER = 'cs2_gc_buymenu_wheel'
 WHEEL_COMMENT = 'cs2_gc original buy wheel'
 WHEEL_OWNER = 'cs2-gc-original-buy-wheel-v1'
@@ -104,7 +107,7 @@ SETTINGS_SCRIPT = r'''
         const h=$.CreatePanel('Label',content,'',{text:'NEW'});
         h.AddClass('SettingsSectionTitleLabel');
         const lowOn=GameInterfaceAPI.GetSettingString('ui_low_end_pc')==='1';
-        _CS2GCSection(content,'MAX PERFORMANCE','Disables retained ragdolls, first-person tracers and animated avatars. Frame limits are unchanged.');
+        _CS2GCSection(content,'MAX PERFORMANCE','Applies the native Low video preset and disables retained ragdolls, first-person tracers and animated avatars. Frame limits are unchanged.');
         _CS2GCChoiceRow(content,[
             ['OFF',!lowOn,()=>{if(lowOn)csToggleGraphics(false);_CS2GCSetting('ui_low_end_pc','0');_CS2GCBuildNewSettings(panel);}],
             ['ON',lowOn,()=>{if(!lowOn)csToggleGraphics(true);_CS2GCSetting('ui_low_end_pc','1');_CS2GCBuildNewSettings(panel);}]
@@ -204,10 +207,9 @@ def prepare(directory, config):
     values = read_settings(game / 'csgo/cfg')
     wheel = disable_legacy_wheel(directory)
     beta_buy = remove_beta_buy(directory)
-    classic = remove_classic(directory)
     animations = prepare_animations(directory, values)
     return 'settings: ' + settings + '; custom menu: ' + legacy_hud + '; original wheel: ' + wheel + \
-        '; beta buy HUD removed: ' + beta_buy + '; classic wheel: ' + classic + '; CS:GO animations: ' + animations
+        '; beta buy HUD removed: ' + beta_buy + '; CS:GO animations: ' + animations
 
 
 def prepare_animations(directory, values):
@@ -227,8 +229,7 @@ def prepare_animations(directory, values):
 SETTINGS_CFG = 'cs2_gc_newsettings.cfg'
 # ui_cs2gc_whatsnew only accepts this release's id: an older id is dropped, so the window shows after an update.
 ALLOWED = {'ui_low_end_pc': ('0', '1'), 'ui_cs2gc_buymenu': ('cs2', 'csgo', 'beta'), 'ui_cs2gc_animations': ('cs2', 'csgo'),
-           'ui_cs2gc_whatsnew': ('0', WHATS_NEW_SEEN), 'ui_cs2gc_smoke': ('0', '1'), 'ui_cs2gc_controls_v1': ('1', '0'),
-           'ui_cs2gc_home_v1': ('1', '0')}
+           'ui_cs2gc_whatsnew': ('0', WHATS_NEW_SEEN), 'ui_cs2gc_smoke': ('0', '1'), 'ui_cs2gc_controls_v1': ('1', '0')}
 LEGACY_KEYS = ('ui_cs2gc_buymenu', 'ui_low_end_pc')  # the only keys files from before the animation toggle hold
 LINE = re.compile(rb'CS2GC_SETTING (' + b'|'.join(re.escape(key.encode()) for key in sorted(ALLOWED)) + rb') (\w+)')
 
@@ -264,7 +265,7 @@ def ensure_settings_cfg(cfg_dir):
         previous = re.sub(r'(?m)^setinfo ui_cs2gc_whatsnew \w+$',
                           'setinfo ui_cs2gc_whatsnew ' + values.get('ui_cs2gc_whatsnew', '0'),
                           current.replace('\r\n', '\n'))
-        release_keys = tuple(k for k in ALLOWED if k != 'ui_cs2gc_home_v1')
+        release_keys = tuple(ALLOWED)
         old_detail = [settings_cfg(values, graphics=OLD_WORLD_DETAIL, keys=keys) for keys in (release_keys, ALLOWED)]
         # Slider-adjusted frame limits still identify an owned file; compare the entire
         # remainder, never treating arbitrary user cfg commands as a migration template.
@@ -297,7 +298,7 @@ def ensure_settings_cfg(cfg_dir):
             for match in re.finditer(r'(?im)^\s*(fps_max(?:_ui)?)\s+\S+', current)
         }
         missing_limits = [limit for limit in DEFAULT_FRAME_LIMITS if limit[0] not in configured_limits]
-        missing_gameplay = [key for key in ('ui_cs2gc_smoke', 'ui_cs2gc_controls_v1', 'ui_cs2gc_home_v1')
+        missing_gameplay = [key for key in ('ui_cs2gc_smoke', 'ui_cs2gc_controls_v1')
                             if not re.search(r'(?m)^\s*setinfo\s+' + key + r'\s+', current)]
         if missing_limits or missing_gameplay:
             contents = current.rstrip('\r\n')
@@ -332,6 +333,7 @@ class NewSettingsBridge:
         self.position = self.log.stat().st_size if self.log.exists() else 0
         self.pending = b''
         self.graphics_baseline = ''
+        self.preset_baseline = None
         self.values = dict(DEFAULTS)
         self.values.update(read_settings(self.cfg_dir))
         if not (self.cfg_dir / SETTINGS_CFG).is_file():
@@ -341,22 +343,33 @@ class NewSettingsBridge:
                               read_text(self.cfg_dir / SETTINGS_CFG).replace('\r\n', '\n'))
             if match:
                 self.graphics_baseline = match[1]
+            match = re.search(r'(?m)^setinfo ' + PRESET_RESTORE_KEY + ' (' + PRESET_RESTORE_VALUE + ')$',
+                              read_text(self.cfg_dir / SETTINGS_CFG).replace('\r\n', '\n'))
+            self.preset_baseline = match[1] if match else None
 
     def consume(self, data):
         lines = (self.pending + data).split(b'\n')
         self.pending = lines.pop()[-4096:]
         changed = set()
         caps = ()
+        preset_changed = False
         for line in lines:
             baseline = re.search(rb'\bCS2GC_GRAPHICS_BASELINE (' + RESTORE_VALUE.encode() + rb')\s*$', line)
             if baseline:
                 self.graphics_baseline = baseline[1].decode()
+            preset = re.search(rb'\bCS2GC_LOW_END_PRESET (clear|[0-4])\s*$', line)
+            if preset:
+                value = preset[1].decode()
+                next_baseline = None if value == 'clear' else value
+                if self.preset_baseline != next_baseline:
+                    self.preset_baseline = next_baseline
+                    preset_changed = True
             sliders = re.search(rb'\bCS2GC_VIDEO_FPS (\d{1,4}) (\d{1,4})\s*$', line)
             if sliders and all(int(v) <= 1000 for v in sliders.groups()):
                 caps = tuple(int(v) for v in sliders.groups())
             for key, value in LINE.findall(line):
                 key, value = key.decode(), value.decode()
-                if key in ('ui_cs2gc_controls_v1','ui_cs2gc_home_v1') and value != '1':
+                if key in ('ui_cs2gc_controls_v1') and value != '1':
                     continue
                 if value in ALLOWED[key] and self.values.get(key) != value:
                     self.values[key] = value
@@ -373,8 +386,8 @@ class NewSettingsBridge:
             caps_changed = contents != original
             if caps_changed:
                 atomic_write(path, contents)
-        if changed:
-            if changed <= {'ui_cs2gc_controls_v1','ui_cs2gc_home_v1'}:
+        if changed or preset_changed:
+            if changed and not preset_changed and changed <= {'ui_cs2gc_controls_v1'}:
                 contents = read_text(path)
                 for key in sorted(changed):
                     contents, count = re.subn(r'(?m)^([ \t]*setinfo[ \t]+' + key + r'[ \t]+)\w+', r'\g<1>1', contents)
@@ -385,10 +398,12 @@ class NewSettingsBridge:
             contents = settings_cfg(self.values)
             if self.values['ui_low_end_pc'] == '1' and self.graphics_baseline:
                 contents += 'setinfo %s %s\n' % (RESTORE_KEY, self.graphics_baseline)
+            if self.preset_baseline is not None:
+                contents += 'setinfo %s %s\n' % (PRESET_RESTORE_KEY, self.preset_baseline)
             for name, value in re.findall(r'(?im)^\s*(fps_max(?:_ui)?)\s+(\d+(?:\.\d+)?)\s*$', read_text(path)):
                 contents = re.sub(r'(?m)^' + name.lower() + r' \S+$', name.lower() + ' ' + value, contents)
             atomic_write(path, contents)
-        return bool(changed) or caps_changed
+        return bool(changed) or caps_changed or preset_changed
 
     def poll(self):
         if not self.log.exists():

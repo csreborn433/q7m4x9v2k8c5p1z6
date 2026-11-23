@@ -25,33 +25,6 @@ LOCAL_PLAY_OWNER = 'cs2-gc-local-play-v1'
 # Written by the earlier reference build for this same owned folder.
 LEGACY_LOCAL_PLAY_COMMENTS = ('cs2_gc local premier and night maps',)
 HASH_CHUNK = 1024 * 1024
-BOT_APPLY_CFG = 'cs2gc_cobble_apply.cfg'
-
-
-def bot_configs():
-    # GO runs before the server exists. Arm a process-local, one-shot choice;
-    # the last offline Wingman exec consumes it after the stock/server configs.
-    command = 'cs2gc_cobble_apply_quota'
-    return [(f'cs2gc_cobble_select_{n}.cfg',
-             f'alias {command} "bot_quota_mode normal; bot_quota {n}"\n')
-            for n in range(4)] + [
-        (BOT_APPLY_CFG, f'{command}\nalias {command} ""\n')]
-
-
-def prepare_bot_configs(cfg):
-    # Use loose cfgs in the same directory as the pinned engine's exec targets.
-    # Never overwrite an existing different script, even one with our filename.
-    missing = []
-    for name, text in bot_configs():
-        path = cfg / name
-        if path.is_symlink() or (path.exists() and (not path.is_file() or read_text(path) != text)):
-            raise ValueError('Refusing to replace a different bot config: ' + name)
-        if not path.exists():
-            missing.append((path, text))
-    cfg.mkdir(parents=True, exist_ok=True)
-    for path, text in missing:
-        with path.open('x', encoding='utf-8', newline='\n') as out:
-            out.write(text)
 
 
 def _sha256_file(path):
@@ -168,11 +141,6 @@ def patch_gamemodes(source, include_cobblestone=True):
                .one('gameModes').one('scrimcomp2v2'))
     practice_groups = wingman.one('mapgroupsSP')
     multiplayer_groups = wingman.one('mapgroupsMP')
-    configs = wingman.one('exec')
-    if [(n.key, n.value) for n in configs.children] != [
-            ('exec', 'gamemode_competitive2v2.cfg'), ('exec_offline', 'gamemode_competitive2v2_offline.cfg'),
-            ('exec', 'gamemode_competitive2v2_server.cfg')]:
-        raise ValueError('Installed Wingman config sequence changed')
     wingman_template = game_modes.one('templates#include').one('2v2')
     mapgroup_insertion = mapgroups.end - 1
     if source[mapgroup_insertion] != '}':
@@ -207,8 +175,6 @@ def patch_gamemodes(source, include_cobblestone=True):
         '\t',
     )) if include_cobblestone else ''
     edits = (
-        (configs.children[-1].end, configs.children[-1].end,
-         newline + '\t\t\t\t\t\t"exec_offline" "' + BOT_APPLY_CFG + '"'),
         (practice_groups.opening, practice_groups.end - 1, wingman_map_list_body(practice_groups)),
         (multiplayer_groups.opening, multiplayer_groups.end - 1,
          wingman_map_list_body(multiplayer_groups)),
@@ -223,7 +189,6 @@ def patch_gamemodes(source, include_cobblestone=True):
 
 SCRIPT=r'''
     let m_localVetoMap='',m_localVeto=null,m_localStarting=false;
-    let m_addBots=false,m_botCount=1;
     const m_localInstalled=__MAPS__;
     const m_localOnline=true;
     // Every map started here is an online listen server (network_server = 0 turns this off): LAN, Hamachi,
@@ -288,7 +253,6 @@ SCRIPT=r'''
     function _LocalEnsureHostOnlineToggle() {
         const container=$('#id-play-menu-practicesettings-container');
         if(!container)return;
-        _LocalBotControls(container, LobbyAPI.BIsHost() && !_IsSearching());
         let row=container.FindChildInLayoutFile('id-play-menu-practicesettings-hostonline');
         if(!row) {
             row=$.CreatePanel('Panel',container,'id-play-menu-practicesettings-hostonline');
@@ -325,33 +289,6 @@ SCRIPT=r'''
             GameInterfaceAPI.ConsoleCommand('exec cs2_gc_network_external');
             $.Schedule(.5,()=>_LocalUpdateHostStatus(row));
         }
-    }
-    function _LocalBotControls(container, editable) {
-        let row=container.FindChildTraverse('CS2GCPlayBots');
-        if(!row) {
-            row=$.CreatePanel('Panel',container,'CS2GCPlayBots');
-            Object.assign(row.style,{flowChildren:'right',padding:'6px 20px',width:'100%'});
-            const toggle=$.CreatePanel('ToggleButton',row,'CS2GCAddBots',{text:'Add Bots'});
-            toggle.checked=m_addBots;
-            const count=$.CreatePanel('DropDown',row,'CS2GCBotCount');
-            Object.assign(count.style,{width:'124px',marginLeft:'12px',verticalAlign:'center'});
-            for(let n=1;n<=3;++n) {
-                const opt=$.CreatePanel('Label',count,'CS2GCBots'+n,{data:String(n)});
-                opt.text=n+(n===1?' bot':' bots');
-                count.AddOption(opt);
-            }
-            count.SetSelected('CS2GCBots'+m_botCount);
-            toggle.SetPanelEvent('onactivate',()=>{m_addBots=toggle.checked;count.enabled=m_addBots;});
-            count.SetPanelEvent('oninputsubmit',()=>{
-                const selected=count.GetSelected();
-                if(selected) {
-                    const n=Number(selected.GetAttributeString('data',''));
-                    if([1,2,3].includes(n))m_botCount=n;
-                }
-            });
-        }
-        row.enabled=editable;
-        row.FindChildTraverse('CS2GCBotCount').enabled=editable&&m_addBots;
     }
     function _LocalPremierPool() {
         const cfg=GameTypesAPI.GetConfig(),active=cfg.mapgroups&&cfg.mapgroups.mg_active;
@@ -534,11 +471,7 @@ def patch(source,maps,online=True):
             _LocalApplyHostOnline();
             if (m_gameModeSetting !== 'premier') _LocalAnnouncePartyStart();
         }'''
-    native_start = '            LobbyAPI.StartMatchmaking(MyPersonaAPI.GetMyOfficialTournamentName(), MyPersonaAPI.GetMyOfficialTeamName(), _GetTournamentOpponent(), stage);'
-    anchors=[(native_start, '''            if (m_serverSetting === 'listen' && !m_isWorkshop && m_gameModeSetting === 'scrimcomp2v2' && LobbyAPI.BIsHost()) {
-                GameInterfaceAPI.ConsoleCommand('exec cs2gc_cobble_select_'+(m_addBots?m_botCount:0));
-            }
-''' + native_start), (start_search, start_search + host_online + '''
+    anchors=[(start_search, start_search + host_online + '''
         $.Msg('[CS2GC Premier] GO server='+m_serverSetting+' mode='+m_gameModeSetting+' workshop='+m_isWorkshop);
         if (m_serverSetting === "listen" && m_gameModeSetting === "premier" && !m_isWorkshop) {
             try { _LocalOpenVeto(); }
@@ -549,10 +482,9 @@ def patch(source,maps,online=True):
             }
             return;
         }'''),
-        ('    function _UpdatePracticeSettingsBtns(isSearching, isHost) {',
-         '''    function _UpdatePracticeSettingsBtns(isSearching, isHost) {
-        const practice=$('#id-play-menu-practicesettings-container');
-        if(practice)_LocalBotControls(practice, isHost && !isSearching);'''),
+        # Keep the custom online hosting row visible for every local mode, not just 'classic'.
+        ("            if (bForceHidden || (sessionSettings.game.type !== 'classic')) {",
+         "            const _cs2gcCustom=['id-play-menu-practicesettings-hostonline'].indexOf(elChild.id)!==-1;\n            if (!_cs2gcCustom && (bForceHidden || (sessionSettings.game.type !== 'classic'))) {"),
         ('''    function _IsGameModeAvailable(serverType, gameMode) {''','''    function _IsGameModeAvailable(serverType, gameMode) {
         const localOnly=serverType==='listen' && m_localAllowedGameModes.includes(gameMode);
         _SetGameModeRadioButtonVisible(gameMode,localOnly);
@@ -616,12 +548,7 @@ def patch(source,maps,online=True):
         ('    function _GetAvailableMapGroups(gameMode, isPlayingOnValveOfficial) {','    function _GetAvailableMapGroups(gameMode, isPlayingOnValveOfficial) {\n        if (m_serverSetting === "listen" && !isPlayingOnValveOfficial && m_localAllowedGameModes.includes(gameMode)) return m_localInstalled.filter(m=>GetMGDetails("mg_"+m)).map(m=>"mg_"+m);\n        if (gameMode === "premier" && !isPlayingOnValveOfficial) return _LocalPremierPool().map(m=>"mg_"+m);'),
         ("            return Object.keys(mapgroup);", "            const groups=Object.keys(mapgroup);\n            if (gameMode === 'competitive' && !isPlayingOnValveOfficial) m_localInstalled.filter(m=>m.indexOf('_night')>=0).forEach(m=>{const g='mg_'+m;if(GetMGDetails(g)&&!groups.includes(g))groups.push(g);});\n            return groups;"),
         ("            selectedMaps = 'mg_lobby_mapveto';\n            primePreference = 1;", "            selectedMaps = m_serverSetting === 'listen' ? 'mg_'+(m_localVetoMap||_LocalPremierPool()[0]||'de_ancient') : 'mg_lobby_mapveto';\n            if(m_serverSetting === 'listen')gameModeFlags=16;\n            primePreference = m_serverSetting === 'listen' ? 0 : 1;"),
-        ("        LobbyAPI.UpdateSessionSettings(settings);\n    }\n    function _SessionSettingsUpdate", """        if(m_serverSetting === 'listen' && !m_isWorkshop)
-            Object.assign(settings.update.Options,{practicesettings_grenades:0,practicesettings_infammo:0,practicesettings_infwarmup:0,practicesettings_annotations:0});
-        if(m_serverSetting === 'listen' && m_gameModeSetting === 'premier')settings.update.Game.map=m_localVetoMap||'';
-        LobbyAPI.UpdateSessionSettings(settings);
-    }
-    function _SessionSettingsUpdate""")]
+        ("        LobbyAPI.UpdateSessionSettings(settings);\n    }\n    function _SessionSettingsUpdate", "        if(m_serverSetting === 'listen' && m_gameModeSetting === 'premier')settings.update.Game.map=m_localVetoMap||'';\n        LobbyAPI.UpdateSessionSettings(settings);\n    }\n    function _SessionSettingsUpdate")]
     if WORKSHOP_MAP in maps:
         anchors.extend([
             ("""        const iconPath = mapGroupName === 'random_classic' ? 'file://{images}/icons/ui/random_map.svg' : 'file://{images}/' + mg.icon_image_path + '.svg';""",
@@ -637,17 +564,9 @@ def patch(source,maps,online=True):
     practice_row = "            if (!elChild.id.startsWith('id-play-menu-practicesettings-'))"
     if source.count(practice_row) != 2:
         raise ValueError('Installed Play practice-row initialization/update contract changed.')
-    # Both stock loops only handle sliders. Keep their nodes for native annotation
-    # lookups, but never initialize or re-show the retired sliders.
-    for_loop = '        for (let elChild of elPracticeSettingsContainer.Children()) {\n'
-    old = for_loop + practice_row + '\n                continue;'
-    if source.count(old) != 2:
-        raise ValueError('Installed Play practice loop changed.')
-    source, count = re.subn(re.escape(old) + r'.*?\n        \}', for_loop +
-        "            if(elChild.id.startsWith('id-play-menu-practicesettings-') && elChild.id!=='id-play-menu-practicesettings-hostonline') elChild.visible=false;\n"
-        "        }", source, flags=re.S)
-    if count != 2:
-        raise ValueError('Installed Play practice loop boundary changed.')
+    source = source.replace(practice_row,
+        "            if (elChild.id === 'id-play-menu-practicesettings-hostonline' ||\n"
+        "                    !elChild.id.startsWith('id-play-menu-practicesettings-'))")
     marker='    function StartSearch() {'
     script=SCRIPT.replace('__MAPS__',json.dumps(maps))
     if not online:
@@ -688,7 +607,6 @@ def prepare(directory,config):
              make_vtex(template, (assets/'cobblestone_emblem.png').read_bytes(), max_size=256)),
         ])
     try:
-        prepare_bot_configs(game/'csgo/cfg')
         migrate_local_play_mount(game)
         result=install_override(directory,enabled=True,folder=LOCAL_PLAY_FOLDER,comment=LOCAL_PLAY_COMMENT,owner=LOCAL_PLAY_OWNER,
             asset='panorama/scripts/mainmenu_play.vts_c',patch=lambda source:patch(source,maps,bool(config.get('network_server',1))),extra=extra)

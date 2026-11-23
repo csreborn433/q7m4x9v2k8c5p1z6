@@ -185,6 +185,35 @@ def fixed_video_script(source):
         if (changed) SettingsMenuShared.VideoSettingsApplyChanges();
     }
     SettingsMenuVideo.ApplyFixedDefaults = ApplyFixedDefaults;
+    function ApplyLowEndPreset(on) {
+        const presets = $('#Presets'), selected = presets && presets.GetSelected();
+        if (!selected) return false;
+        const key = 'ui_cs2gc_lowend_preset';
+        let baseline = GameInterfaceAPI.GetSettingString(key);
+        if (on) {
+            if (!/^[0-4]$/.test(baseline || '')) {
+                const match = /^presetlevel([0-4])$/.exec(selected.id || '');
+                baseline = match ? match[1] : '4';
+                GameInterfaceAPI.SetSettingString(key, baseline);
+                $.Msg('CS2GC_LOW_END_PRESET ' + baseline);
+            }
+        } else if (!/^[0-4]$/.test(baseline || '')) {
+            return false;
+        }
+        const target = on ? 'presetlevel0' : 'presetlevel' + baseline;
+        if (selected.id !== target) {
+            if (!presets.FindDropDownMenuChild(target)) return false;
+            presets.SetSelected(target);
+            $.DispatchEvent('CSGOPresetChanged');
+            SettingsMenuShared.VideoSettingsApplyChanges();
+        }
+        if (!on) {
+            GameInterfaceAPI.SetSettingString(key, 'none');
+            $.Msg('CS2GC_LOW_END_PRESET clear');
+        }
+        return true;
+    }
+    SettingsMenuVideo.ApplyLowEndPreset = ApplyLowEndPreset;
     function SelectSimpleVideoSettings() {""")
     return _replace(source, "        $('#AdvancedVideoSettingsRadio').checked = true;",
                     "        $('#AdvancedVideoSettingsRadio').checked = true;\n        ApplyFixedDefaults();")
@@ -193,7 +222,9 @@ def fixed_video_script(source):
 def fixed_video_shared_script(source):
     return _replace(source, '        _RefreshControlsRecursive(newTabPanel);', """        _RefreshControlsRecursive(newTabPanel);
         if (newTab == videoSettingsStr && SettingsMenuVideo.ApplyFixedDefaults)
-            SettingsMenuVideo.ApplyFixedDefaults();""")
+            SettingsMenuVideo.ApplyFixedDefaults();
+        if (newTab == videoSettingsStr && SettingsMenuVideo.ApplyLowEndPreset)
+            SettingsMenuVideo.ApplyLowEndPreset(GameInterfaceAPI.GetSettingString('ui_low_end_pc') === '1');""")
 
 
 def layout(data, name, config):

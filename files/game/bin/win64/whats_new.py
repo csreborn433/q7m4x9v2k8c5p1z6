@@ -3,8 +3,8 @@
 RELEASE must match data/mod_version.txt. Closing the window saves ui_cs2gc_whatsnew = SEEN_ID through the NEW
 settings bridge (native_newsettings.py), so it appears again only after the next update changes RELEASE.
 """
-RELEASE = '1.0.13'
-SEEN_ID = 'r1_0_11'
+RELEASE = '1.0.14'
+SEEN_ID = 'r1_0_14'
 DISPLAY_VERSION = 'V1.0'  # Patch releases share one player-facing bulletin.
 TITLE = "WHAT'S NEW IN CS-REBORN"
 SUBTITLE = DISPLAY_VERSION
@@ -54,8 +54,8 @@ SECTIONS = [
                            'one Armory star. The value is identical in single-item and multi-item selling.'),
         ('Video settings', 'choose Low, Medium or High and a supported aspect ratio on one Video page. '
                            'The game and menu FPS caps are separate. VSync stays off and player contrast stays on.'),
-        ('Low-end mode', 'reduces ragdolls and turns off first-person tracers and animated avatars without cheats. '
-                         'Switch it off to restore those preferences.'),
+        ('Low-end mode', 'applies the native Low video preset, reduces ragdolls, and turns off first-person tracers '
+                         'and animated avatars without changing sv_cheats. Switching it off restores your previous preset.'),
         ('Automatic first-person death view', 'the head-attached camera is always enabled for default, official and '
                                              'anime agents. It holds for 3 seconds, then fades to a living teammate, '
                                              'or stays at your head when nobody is alive.'),
