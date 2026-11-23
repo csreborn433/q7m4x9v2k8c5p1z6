@@ -260,7 +260,7 @@ def _updated_manifest(current, feed, files):
     return (json.dumps(updated, indent=2) + '\n').encode('utf-8')
 
 
-def _compare_with_feed(root, opener):
+def _compare_with_feed(root, opener, redownload=False):
     """(current, manifest path, feed, feed files, feed revision, changed files); None for a local test build."""
     if opener is None:
         opener = urllib.request.build_opener().open
@@ -297,6 +297,13 @@ def _compare_with_feed(root, opener):
     if not isinstance(feed.get('version'), str):
         raise UpdateError('The public update manifest has no mod version.')
 
+    # An embedded release can be distributed before the public channel catches up.
+    local_version = current.get('version', '')
+    if (isinstance(local_version, str) and re.fullmatch(r'\d+\.\d+\.\d+', local_version) and
+            re.fullmatch(r'\d+\.\d+\.\d+', feed['version']) and
+            tuple(map(int, local_version.split('.'))) > tuple(map(int, feed['version'].split('.')))):
+        return current, local_manifest, current, {}, feed_commit, []
+
     current_files = current['files']
     for name, expected in feed_files.items():
         if name.startswith(PYTHON_PREFIX) and current_files.get(name) != expected:
@@ -307,7 +314,7 @@ def _compare_with_feed(root, opener):
         if name.startswith(PYTHON_PREFIX):
             continue
         destination = root / Path(*PurePosixPath(name).parts)
-        if current_files.get(name) != expected or not destination.is_file():
+        if redownload or current_files.get(name) != expected or not destination.is_file():
             changed.append((name, expected))
     return current, local_manifest, feed, feed_files, feed_commit, changed
 
@@ -318,11 +325,11 @@ def pending_update(root, opener=None):
     return plan[2]['version'] if plan is not None and plan[5] else None
 
 
-def check_for_updates(root, opener=None, install=True, game_closed_check=None):
+def check_for_updates(root, opener=None, install=True, game_closed_check=None, redownload=False):
     if opener is None:
         opener = urllib.request.build_opener().open
     root = Path(root).resolve()
-    plan = _compare_with_feed(root, opener)
+    plan = _compare_with_feed(root, opener, redownload)
     if plan is None:
         print('Local test build: public updates are disabled. Install a normal release launcher to resume them.', flush=True)
         return False
@@ -400,9 +407,10 @@ def main():
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--check-only', action='store_true',
                         help='report whether a public update exists without installing it')
+    parser.add_argument('--redownload', action='store_true', help='fetch fresh copies of the published mod payload')
     args = parser.parse_args()
     try:
-        check_for_updates(args.root, install=not args.check_only)
+        check_for_updates(args.root, install=not args.check_only, redownload=args.redownload)
         return 0
     except (OSError, RuntimeError, UpdateError, zipfile.BadZipFile) as error:
         print('Update check failed: ' + str(error), file=sys.stderr, flush=True)

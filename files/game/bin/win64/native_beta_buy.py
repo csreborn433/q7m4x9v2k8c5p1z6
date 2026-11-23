@@ -10,3 +10,9 @@ def remove(directory):
     return install_override(directory, enabled=False, folder='cs2_gc_beta_buy', comment='cs2_gc beta buy HUD',
                             owner='cs2-gc-beta-buy-v1', asset='panorama/layout/buymenu.vxml_c',
                             patch=lambda resource: resource, compiled_layout=True)
+
+
+def remove_classic(directory):
+    return install_override(directory, enabled=False, folder='cs2_gc_classic_wheel',
+                            comment='cs2_gc classic buy wheel', owner='cs2-gc-classic-wheel-v1',
+                            asset='panorama/layout/buymenu.vxml_c', patch=lambda data: data, compiled_layout=True)

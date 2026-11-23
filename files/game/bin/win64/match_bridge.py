@@ -39,4 +39,4 @@ def prepare(directory, config):
         atomic_bytes(dll, binary)
     atomic_bytes(marker, (json.dumps(dict(owner=OWNER, sha256=spec['sha256'])) + '\n').encode())
     return ('installed: FACEIT-style local match flow (ready-up warmup, knife round, side pick, '
-            'tactical timeouts, knife drop, 5v5 wingman, bot fill)')
+            'tactical timeouts, knife drop, 5v5 wingman)')

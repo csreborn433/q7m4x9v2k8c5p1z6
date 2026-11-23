@@ -3,8 +3,8 @@
 RELEASE must match data/mod_version.txt. Closing the window saves ui_cs2gc_whatsnew = SEEN_ID through the NEW
 settings bridge (native_newsettings.py), so it appears again only after the next update changes RELEASE.
 """
-RELEASE = '1.0.9'
-SEEN_ID = 'r1_0_9'
+RELEASE = '1.0.11'
+SEEN_ID = 'r1_0_11'
 DISPLAY_VERSION = 'V1.0'  # Patch releases share one player-facing bulletin.
 TITLE = "WHAT'S NEW IN CS-REBORN"
 SUBTITLE = DISPLAY_VERSION
@@ -18,6 +18,8 @@ SECTIONS = [
         ('NEW: PRIME Karambit', 'a standalone Karambit with its own inspect, draw and attack '
                                 'animations, a blade-down grip and a 3D preview. Buy it in the Armory for 30 stars, then equip it as '
                                 'your CT or T knife.'),
+        ('Cobblestone bots', 'Add Bots in Play lets the host choose one, two or three bots. Leave it off for a human-only match.'),
+        ('Menus', 'Home links directly to regular Settings. The stock buy menu is back, including with old animations enabled. The chat wheel has been removed.'),
         ('Settings', 'ordinary Settings now opens on Crosshair. Game has viewmodel sliders and a live radar preview. '
                      'The separate NEW SETTINGS tab has its own tuning icon.'),
         ('Launch banner', 'Play shows a CS:REBORN loading banner while your game is being prepared.'),
@@ -50,9 +52,10 @@ SECTIONS = [
                             'Goku and Itachi pink, Naruto and Kakashi purple.'),
         ('One-star sales', 'sellable local weapons, knives, gloves, agents, stickers, charms and containers all grant '
                            'one Armory star. The value is identical in single-item and multi-item selling.'),
-        ('Max performance', 'the low-end option disables environmental fog, microshadows and smoke shadows, '
-                            'reduces particle detail and distant props, caps texture streaming at the supported '
-                            '512-pixel minimum, and keeps fewer old ragdolls. Your FPS caps are preserved.'),
+        ('Video settings', 'choose Low, Medium or High and a supported aspect ratio on one Video page. '
+                           'The game and menu FPS caps are separate. VSync stays off and player contrast stays on.'),
+        ('Low-end mode', 'reduces ragdolls and turns off first-person tracers and animated avatars without cheats. '
+                         'Switch it off to restore those preferences.'),
         ('Automatic first-person death view', 'the head-attached camera is always enabled for default, official and '
                                              'anime agents. It holds for 3 seconds, then fades to a living teammate, '
                                              'or stays at your head when nobody is alive.'),

@@ -3,6 +3,7 @@
 Installed mainmenu.vts_c is patched in its own VPK.
 """
 from native_resources import install_override
+from native_newsettings import LOW_END_TOGGLE_JS
 from native_social import SOCIAL_MENU
 from native_black_market import BLACK_MARKET
 import json
@@ -841,7 +842,7 @@ CONTROLS_DEFAULTS = """
         }
 """
 
-WATCH_SETTINGS = """
+WATCH_SETTINGS = LOW_END_TOGGLE_JS + """
     // cs2_gc: CS2-style slide toggle, styled inline after slider_toggle.css (the Watch page does not load it).
     const _cs2gcAnimBoot = GameInterfaceAPI.GetSettingString('ui_cs2gc_animations') === 'csgo';
     const _cs2gcGraphicsBoot = GameInterfaceAPI.GetSettingString('ui_low_end_pc') === '1';
@@ -879,6 +880,7 @@ WATCH_SETTINGS = """
         row.SetPanelEvent('onactivate', () => {
             on = !on;
             const value = values[on ? 0 : 1];
+            if (setting === 'ui_low_end_pc') csToggleGraphics(on);
             GameInterfaceAPI.SetSettingString(setting, value);
             $.Msg('CS2GC_SETTING ' + setting + ' ' + value);
             show(on);
@@ -898,7 +900,7 @@ WATCH_SETTINGS = """
         title.AddClass('stratum-regular-condensed');
         Object.assign(title.style, {fontSize:'20px', color:'white', fontWeight:'medium'});
         const about = $.CreatePanel('Label', text, '', {text:'Off (default): current CS2 viewmodel animations. On: the original ' +
-            'CS:GO draw, inspect and reload animations for guns and knives. Restart CS2 to apply.'});
+            'CS:GO draw, inspect and reload animations. The buy menu stays unchanged. Restart CS2 to apply.'});
         Object.assign(about.style, {fontSize:'15px', color:'#a5b1bd', marginTop:'4px'});
         const status = $.CreatePanel('Label', text, 'CS2GCAnimationStatus', {text:''});
         Object.assign(status.style, {fontSize:'14px', marginTop:'6px', fontWeight:'bold'});
@@ -1054,8 +1056,8 @@ WATCH_SETTINGS = """
             _LocalAnimationToggle(gameplay);
             _LocalHudColourMenu(gameplay);
             _LocalSettingsToggle(graphics, 'CS2GCLowEndGraphicsToggle', 'ENABLE LOW END PC GRAPHICS',
-                'Reduces particles, fog, microshadows, smoke shadows, distant props, textures and old ragdolls. Restart CS2 to apply.',
-                'ui_low_end_pc', _cs2gcGraphicsBoot, _cs2gcGraphicsBoot);
+                'Disables retained ragdolls, first-person tracers and animated avatars. Use the Low preset in Video to reduce world detail.',
+                'ui_low_end_pc', _cs2gcGraphicsBoot, _cs2gcGraphicsBoot, ['Low-end graphics active','Default graphics active']);
             panel.__cs2gcSettingsPlaceholder = true;
         }
         _m_activeTab = panel;
@@ -1136,6 +1138,31 @@ def patch_vanity_menu(source):
     return source.replace(VANITY_FOCUS_ANCHOR, VANITY_FOCUS + VANITY_FOCUS_ANCHOR, 1)
 
 
+def first_home_preview(source):
+    from native_presentation import _replace
+    anchor = '        const oSettings = ItemInfo.GetOrUpdateVanityCharacterSettings();'
+    return _replace(source, anchor, """        const firstHome = !GameStateAPI.IsLocalPlayerPlayingMatch() &&
+            MyPersonaAPI.IsInventoryValid() && MyPersonaAPI.IsConnectedToGC() &&
+            GameInterfaceAPI.GetSettingString('ui_cs2gc_home_v1') !== '1';
+        let homeAgent, homeWeapon, homeSlot;
+        if (firstHome) {
+            homeAgent = LoadoutAPI.GetDefaultItem('ct','customplayer');
+            const def = InventoryAPI.GetItemDefinitionIndexFromDefinitionName('weapon_usp_silencer');
+            homeWeapon = def && InventoryAPI.GetFauxItemIDFromDefAndPaintIndex(def,0);
+            homeSlot = homeWeapon && InventoryAPI.GetDefaultSlot(homeWeapon);
+            if (homeSlot && InventoryAPI.IsValidItemID(homeAgent) && InventoryAPI.IsValidItemID(homeWeapon)) {
+                GameInterfaceAPI.SetSettingString('ui_vanitysetting_team','ct');
+                GameInterfaceAPI.SetSettingString('ui_vanitysetting_loadoutslot_ct',homeSlot);
+            } else homeSlot = '';
+        }
+        const oSettings = ItemInfo.GetOrUpdateVanityCharacterSettings();
+        if (firstHome && homeSlot) {
+            Object.assign(oSettings,{team:'ct',charItemId:homeAgent,weaponItemId:homeWeapon,loadoutSlot:homeSlot});
+            GameInterfaceAPI.SetSettingString('ui_cs2gc_home_v1','1');
+            $.Msg('CS2GC_SETTING ui_cs2gc_home_v1 1');
+        }""")
+
+
 def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
     # Omit just the stock alert at its producer; its icon has no text and shares a parent with other alerts.
     update = re.compile(r'        if \(NewsAPI\.IsNewClientAvailable\(\)\) \{\n'
@@ -1161,8 +1188,10 @@ def patch(source, care_packages=False, hide_promo=True, pet_id='0'):
     hide_pulls = '\n        _LocalHideRecentPulls($.GetContextPanel());\n'
     source = source.replace(floating_hide, floating_hide + hide_pulls, 1)
     source=source.replace(ANCHOR, '''    function _LocalHideRecentPulls(root) {
-        const box = root.FindChildTraverse('cs2gc-home-pulls');
-        if (box) box.visible = false;
+        ['cs2gc-home-pulls','cs2gc-home-settings'].forEach(id => {
+            const box = root.FindChildTraverse(id);
+            if (box) box.visible = false;
+        });
     }
     let m_localMenuTimer = null;\n    let m_localMenuVisible = false;\n''' +
                           '    let m_localWhatsNewShown = false;\n    let m_localPartyUi = null;\n    let m_localPartyAccess = \'\';\n' +
@@ -1240,7 +1269,7 @@ def prepare(directory, config):
     if icon: extra.append((WHATS_NEW_ICON, icon))
     menu=install_override(directory, enabled=True, folder='cs2_gc_mainmenu',
         comment='cs2_gc main-menu promotion', owner='cs2-gc-mainmenu-v1',
-        asset='panorama/scripts/mainmenu.vts_c', patch=lambda source: patch(native_compact_settings.menu_navigation(source),
+        asset='panorama/scripts/mainmenu.vts_c', patch=lambda source: patch(first_home_preview(native_compact_settings.menu_navigation(source)),
             bool(config['care_packages_enabled']),bool(config['hide_mainmenu_promo']),pet_id),
         extra=extra)
     food=install_override(directory, enabled=True, folder='cs2_gc_pet_food',

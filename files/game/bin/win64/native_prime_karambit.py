@@ -3,6 +3,7 @@ import argparse
 import copy
 import hashlib
 import json
+import math
 from pathlib import Path
 import struct
 import zlib
@@ -385,6 +386,18 @@ def owned_assets(proxy, sdk, icon):
         files[path + '_c'] = (output / (path + '_c')).read_bytes()
     files[HUD_ICON] = (output / HUD_ICON).read_bytes()
     report = json.loads(read_text(sdk / 'content/csgo' / CLIP_FOLDER / 'compiled_validation.json'))
+    def data(path):
+        return na.plain(na.read_block(dict(na.resource_blocks(files[path + '_c'])[1])['DATA'])[1])
+    # Clips and mesh must interpret the ring in the same asset-local space.
+    model = data(MODEL)['m_modelSkeleton']
+    rig = data(SECONDARY)
+    if model['m_boneName'] != rig['m_boneIDs'] or model['m_nParent'] != rig['m_parentIndices']:
+        raise ValueError('PRIME model and clip skeleton hierarchies differ')
+    for pos, rot, ref in zip(model['m_bonePosParent'], model['m_boneRotParent'], rig['m_parentSpaceReferencePose']):
+        if math.dist(pos, ref[:3]) > 0.001 or 1 - abs(sum(a*b for a,b in zip(rot, ref[4:8]))) > 1e-5:
+            raise ValueError('PRIME model and clip skeleton bind transforms differ')
+    if 'ring_contact' not in report:
+        raise ValueError('Rebuild and verify the ring-fitted PRIME clips before exporting')
     for name in CLIPS:
         path = CLIP_FOLDER + name + '.vnmclip_c'
         if hashlib.sha256(files[path]).hexdigest() != report['animations'][name]['sha256']:

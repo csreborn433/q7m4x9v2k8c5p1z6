@@ -46,7 +46,7 @@ def verify_build(root, supported):
             raise SetupError('Incomplete CS2 installation: '+name+'. Finish BOTH depot downloads before launching.')
         if digest(path) != expected:
             raise SetupError('Unsupported CS2 files: '+name+'. This ZIP supports Steam build '+
-                             supported['steam_build']+'. See README-DOWNGRADE.md in the game folder.')
+                             supported['steam_build']+'. Choose a separate install folder and click Install in CS:REBORN.')
 
 
 def verify_package(root, manifest):
