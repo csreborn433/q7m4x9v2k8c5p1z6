@@ -139,16 +139,15 @@ def video_page(root):
 
     preview = find(advanced, 'id', 'VSMapPreviewPanel')
     columns = parent_panel(advanced, preview)
-    set_panels(columns, [p for p in panels(columns) if p is not preview])
-    settings, = panels(columns)
+    set_attr(preview, 'visible', 'false')
+    settings = next(p for p in panels(columns) if p is not preview)
     style = attrs(settings).get('style', '')
     if 'width: 50%;' not in style:
         raise ValueError('Installed advanced video column contract changed')
     set_attr(settings, 'style', style.replace('width: 50%;', 'width: 100%;', 1))
 
     magnification_controls = parent_panel(advanced, find(advanced, 'id', 'MagnificationSlider'))
-    actions = parent_panel(advanced, magnification_controls)
-    set_panels(actions, [p for p in panels(actions) if p is not magnification_controls])
+    set_attr(magnification_controls, 'visible', 'false')
 
     contrast = find(advanced, 'id', 'PlayerContrast')
     set_attr(parent_panel(advanced, contrast), 'visible', 'false')
