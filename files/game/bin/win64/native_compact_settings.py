@@ -140,14 +140,16 @@ def video_page(root):
     preview = find(advanced, 'id', 'VSMapPreviewPanel')
     columns = parent_panel(advanced, preview)
     set_attr(preview, 'visible', 'false')
+    set_attr(find(advanced, 'id', 'VSMapPreviewMag'), 'visible', 'false')
     settings = next(p for p in panels(columns) if p is not preview)
     style = attrs(settings).get('style', '')
     if 'width: 50%;' not in style:
         raise ValueError('Installed advanced video column contract changed')
     set_attr(settings, 'style', style.replace('width: 50%;', 'width: 100%;', 1))
 
-    magnification_controls = parent_panel(advanced, find(advanced, 'id', 'MagnificationSlider'))
-    set_attr(magnification_controls, 'visible', 'false')
+    magnification_controls = parent_panel(advanced, find(advanced, 'id', 'MagMode'))
+    magnification_row = parent_panel(advanced, magnification_controls)
+    set_attr(magnification_row, 'visible', 'false')
 
     contrast = find(advanced, 'id', 'PlayerContrast')
     set_attr(parent_panel(advanced, contrast), 'visible', 'false')
@@ -158,7 +160,12 @@ def video_page(root):
     expected = ['presetlevel0', 'presetlevel1', 'presetlevel2', 'presetlevel3', 'presetlevel4']
     if [attrs(option).get('id') for option in options] != expected:
         raise ValueError('Installed video preset list contract changed')
-    set_panels(presets, options[:4])
+    set_attr(options[4], 'visible', 'false')
+    preset_row = parent_panel(advanced, presets)
+    preset_section = parent_panel(advanced, preset_row)
+    quality_controls = next(p for p in panels(preset_section)
+                            if attrs(p).get('class') == 'top-bottom-flow')
+    set_attr(quality_controls, 'visible', 'false')
 
 
 def fixed_video_script(source):
